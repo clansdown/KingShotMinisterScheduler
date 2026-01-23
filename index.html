@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KingShot Minister Scheduler</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .day-section { margin-bottom: 30px; }
+        h2 { color: #333; }
+        input[type="file"] { margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h1>KingShot Minister Scheduler</h1>
+    <p>Upload a CSV file with player data to generate the minister and advisor schedules.</p>
+    <input type="file" id="csvFileInput" accept=".csv">
+    <div id="loadingIndicator" style="display: none;">Processing...</div>
+
+    <div class="day-section">
+        <h2>Day 1 Appointments (Chief Minister)</h2>
+        <table id="day1Table">
+            <thead>
+                <tr>
+                    <th>Start Time UTC</th>
+                    <th>End Time UTC</th>
+                    <th>Alliance/Player</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <div class="day-section">
+        <h2>Day 2 Appointments (Chief Minister)</h2>
+        <table id="day2Table">
+            <thead>
+                <tr>
+                    <th>Start Time UTC</th>
+                    <th>End Time UTC</th>
+                    <th>Alliance/Player</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <div class="day-section">
+        <h2>Day 4 Appointments (Noble Minister)</h2>
+        <table id="day4Table">
+            <thead>
+                <tr>
+                    <th>Start Time UTC</th>
+                    <th>End Time UTC</th>
+                    <th>Alliance/Player</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <div class="day-section">
+        <h2>Day 5 Appointments (Chief Minister)</h2>
+        <table id="day5Table">
+            <thead>
+                <tr>
+                    <th>Start Time UTC</th>
+                    <th>End Time UTC</th>
+                    <th>Alliance/Player</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <div class="day-section">
+        <h2>Waiting List</h2>
+        <ul id="waitingList"></ul>
+    </div>
+
+    <script src="calculator.js"></script>
+</body>
+</html>
