@@ -30,6 +30,7 @@
             <span class="badge bg-secondary">All Times</span>
         </p>
         <button class="btn btn-outline-primary" type="button" id="helpToggleBtn" aria-expanded="false">Show Field Help</button>
+        <a href="blank.csv" class="float-end">Download Blank CSV</a>
         <div id="helpDetails" class="help-details" style="display: none;">
             <ul class="list-group list-group-flush mt-2">
                 <li class="list-group-item"><strong>Alliance</strong>: Player's alliance name (e.g., "MyAlliance")</li>
@@ -46,7 +47,17 @@
             </ul>
         </div>
     </div>
-    <input type="file" id="csvFileInput" accept=".csv" class="form-control">
+    <div class="row">
+        <div class="col-auto">
+            <div class="input-group">
+                <span class="input-group-text">Min Hours</span>
+                <input type="number" id="minHoursInput" class="form-control" min="0" value="20" data-bs-toggle="tooltip" title="Minimum speedups (hours) required for Construction + Research combined, or for Soldier Training, to include the player in scheduling.">
+            </div>
+        </div>
+        <div class="col">
+            <input type="file" id="csvFileInput" accept=".csv" class="form-control">
+        </div>
+    </div>
     <div id="loadingIndicator" style="display: none;">Processing...</div>
 
      <div class="day-section" id="day1Section" style="display: none;">
@@ -110,6 +121,11 @@
         <ul id="waitingList"></ul>
     </div>
 
+     <div class="day-section" id="filteredUsersSection" style="display: none;">
+         <h2>Filtered Out Users (did not meet minimum hours requirement)</h2>
+        <ul id="filteredUsersList"></ul>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7PVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
     <script src="calculator.js"></script>
     <script>
@@ -128,6 +144,8 @@
                     button.setAttribute('aria-expanded', 'true');
                 }
             });
+            const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+            tooltipTriggerList.forEach(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
         });
     </script>
 </body>

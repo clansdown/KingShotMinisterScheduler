@@ -367,6 +367,26 @@ function populateWaitingList(waiting) {
 }
 
 /**
+ * Populates the filtered users list.
+ * @param {Array<Object>} filteredOut - Array of filtered-out player objects.
+ */
+function updateFilteredList(filteredOut) {
+    const section = document.getElementById('filteredUsersSection');
+    const list = document.getElementById('filteredUsersList');
+    if (filteredOut.length > 0) {
+        list.innerHTML = '';
+        filteredOut.forEach(player => {
+            const li = document.createElement('li');
+            li.textContent = `${player.Alliance}/${player.Player}`;
+            list.appendChild(li);
+        });
+        section.style.display = 'block';
+    } else {
+        section.style.display = 'none';
+    }
+}
+
+/**
  * Populates the debug table with player time slots if DEBUG is true.
  * Dynamically creates and inserts the debug section before Day 1.
  * @param {Array<Object>} players - Array of player objects.
@@ -404,16 +424,21 @@ function populateDebugTable(players) {
 }
 
 /**
- * Processes players, allocates speedups, creates lists, and schedules appointments.
+ * Processes players, allocates speedups, filters, creates lists, and schedules appointments.
  * @param {Array<Object>} players - Array of player objects from CSV.
+ * @param {number} minHours - Minimum hours required for construction+research or training.
  */
-function processAndSchedule(players) {
+function processAndSchedule(players, minHours) {
     // Allocate general speedups
     players.forEach(allocateGeneralSpeedups);
 
-    // Create lists
-    const ministerList = createMinisterList(players);
-    const advisorList = createAdvisorList(players);
+    // Filter players based on minimum hours
+    const filtered = players.filter(player => (player['Construction'] + player['Research'] >= minHours) || (player['Soldier Training'] >= minHours));
+    const filteredOut = players.filter(player => !filtered.includes(player));
+
+    // Create lists from filtered players
+    const ministerList = createMinisterList(filtered);
+    const advisorList = createAdvisorList(filtered);
 
     // Debug: Show player time slots before Day 1 scheduling
     populateDebugTable(players);
@@ -421,7 +446,7 @@ function processAndSchedule(players) {
     // Initialize assignments and tracking
     const assignments = { 1: [], 2: [], 4: [], 5: [] };
     const playerAssignments = {};
-    players.forEach(player => {
+    filtered.forEach(player => {
         const playerId = `${player.Player}-${player.Alliance}`;
         playerAssignments[playerId] = { ministerAssigned: false, advisorAssigned: false };
     });
@@ -437,6 +462,7 @@ function processAndSchedule(players) {
 
      // Update UI
      updateScheduleTables(assignments, waiting);
+     updateFilteredList(filteredOut);
      document.querySelectorAll('.day-section').forEach(el => el.style.display = 'block');
      document.getElementById('day1Section').scrollIntoView({ behavior: 'smooth', block: 'start' });
      document.getElementById('loadingIndicator').style.display = 'none';
@@ -451,8 +477,9 @@ document.getElementById('csvFileInput').addEventListener('change', function(even
         reader.onload = function(e) {
             const csvText = e.target.result;
             const players = parseCsvToObjects(csvText);
+            const minHours = parseInt(document.getElementById('minHoursInput').value) || 20;
             // Process and schedule
-            processAndSchedule(players);
+            processAndSchedule(players, minHours);
         };
         reader.readAsText(file);
     }
