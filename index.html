@@ -29,29 +29,39 @@
             <span class="badge bg-secondary me-1">Time Slot End UTC</span>
             <span class="badge bg-secondary">All Times</span>
          </p>
-         <div class="row">
-             <div class="col">
-                 <button class="btn btn-outline-primary" type="button" id="helpToggleBtn" aria-expanded="false">Show Field Help</button>
-             </div>
-             <div class="col text-end">
-                 (<a href="blank.csv">Download Blank CSV</a>)
-             </div>
+          <div class="row">
+              <div class="col">
+                  <button class="btn btn-outline-primary me-2" type="button" id="helpToggleBtn" aria-expanded="false">Show Field Help</button>
+                  <button class="btn btn-outline-primary" type="button" id="howItWorksBtn" aria-expanded="false">How It Works</button>
+              </div>
+              <div class="col text-end">
+                  (<a href="blank.csv">Download Blank CSV</a>)
+              </div>
+          </div>
+         <div id="helpDetails" class="help-details" style="display: none;">
+             <ul class="list-group list-group-flush mt-2">
+                 <li class="list-group-item"><strong>Alliance</strong>: Player's alliance name (e.g., "MyAlliance")</li>
+                 <li class="list-group-item"><strong>Player</strong>: Player's name (e.g., "Player1")</li>
+                 <li class="list-group-item"><strong>General Speedups</strong>: Number of general speedups (e.g., 10)</li>
+                 <li class="list-group-item"><strong>General Used For</strong>: Categories for general speedups (comma-separated from: Soldier Training, Construction, Research; e.g., "Construction,Research")</li>
+                 <li class="list-group-item"><strong>Soldier Training</strong>: Base soldier training speedups (e.g., 5)</li>
+                 <li class="list-group-item"><strong>Construction</strong>: Base construction speedups (e.g., 3)</li>
+                 <li class="list-group-item"><strong>Research</strong>: Base research speedups (e.g., 2)</li>
+                 <li class="list-group-item"><strong>TrueGold Pieces</strong>: Number of TrueGold pieces (e.g., 1)</li>
+                 <li class="list-group-item"><strong>Time Slot Start UTC</strong>: Overall start time in HH:MM (e.g., "00:00")</li>
+                 <li class="list-group-item"><strong>Time Slot End UTC</strong>: Overall end time in HH:MM (e.g., "23:59")</li>
+                  <li class="list-group-item"><strong>All Times</strong>: Available time ranges (comma-separated, supports raw hours like "19-2" for overnight 19:00-23:59 and 00:00-02:00, or full HH:MM like "00:00-12:00,18:00-23:59"; hours are clamped to 0-23)</li>
+             </ul>
          </div>
-        <div id="helpDetails" class="help-details" style="display: none;">
-            <ul class="list-group list-group-flush mt-2">
-                <li class="list-group-item"><strong>Alliance</strong>: Player's alliance name (e.g., "MyAlliance")</li>
-                <li class="list-group-item"><strong>Player</strong>: Player's name (e.g., "Player1")</li>
-                <li class="list-group-item"><strong>General Speedups</strong>: Number of general speedups (e.g., 10)</li>
-                <li class="list-group-item"><strong>General Used For</strong>: Categories for general speedups (comma-separated from: Soldier Training, Construction, Research; e.g., "Construction,Research")</li>
-                <li class="list-group-item"><strong>Soldier Training</strong>: Base soldier training speedups (e.g., 5)</li>
-                <li class="list-group-item"><strong>Construction</strong>: Base construction speedups (e.g., 3)</li>
-                <li class="list-group-item"><strong>Research</strong>: Base research speedups (e.g., 2)</li>
-                <li class="list-group-item"><strong>TrueGold Pieces</strong>: Number of TrueGold pieces (e.g., 1)</li>
-                <li class="list-group-item"><strong>Time Slot Start UTC</strong>: Overall start time in HH:MM (e.g., "00:00")</li>
-                <li class="list-group-item"><strong>Time Slot End UTC</strong>: Overall end time in HH:MM (e.g., "23:59")</li>
-                 <li class="list-group-item"><strong>All Times</strong>: Available time ranges (comma-separated, supports raw hours like "19-2" for overnight 19:00-23:59 and 00:00-02:00, or full HH:MM like "00:00-12:00,18:00-23:59"; hours are clamped to 0-23)</li>
-            </ul>
-        </div>
+         <div id="howItWorksDetails" class="help-details" style="display: none;">
+             <ul class="list-group list-group-flush mt-2">
+                 <li class="list-group-item"><strong>Speedup Allocation</strong>: General speedups are distributed based on the 'General Used For' field. Empty field or all three categories (Soldier Training, Construction, Research) → even split among them. Two categories → 60% to the first listed, 40% to the second. One category → all to that category. </li>
+                 <li class="list-group-item"><strong>Player Filtering</strong>: Players are included only if they meet the minimum speedups: Construction + Research ≥ minimum for minister roles, or Soldier Training ≥ minimum for advisor roles.</li>
+                 <li class="list-group-item"><strong>Ranking</strong>: Players qualifying for minister roles are ranked by the sum of Construction and Research speedups. Players qualifying for advisor roles are ranked by Soldier Training speedups.</li>
+                 <li class="list-group-item"><strong>Scheduling</strong>: Players are processed in ranked order. For each player, starting with the first, they are assigned to
+                     the earliest available 30-minute slot that fits their time windows if there is one available. (If none are available, they're put on the waiting list.)</li>
+             </ul>
+         </div>
     </div>
     <div class="row">
         <div class="col-auto">
@@ -99,7 +109,7 @@
     </div>
 
      <div class="day-section" style="display: none;">
-         <h2>Day 4 Appointments (Noble Minister)</h2>
+         <h2>Day 4 Appointments (Noble Advisor)</h2>
           <table id="day4Table" class="table table-striped">
                <thead>
                    <tr>
@@ -155,6 +165,20 @@
                     details.style.display = 'block';
                     button.textContent = 'Hide Field Help';
                     button.setAttribute('aria-expanded', 'true');
+                }
+            });
+            const howItWorksButton = document.getElementById('howItWorksBtn');
+            const howItWorksDetails = document.getElementById('howItWorksDetails');
+            howItWorksButton.addEventListener('click', function() {
+                const isExpanded = howItWorksButton.getAttribute('aria-expanded') === 'true';
+                if (isExpanded) {
+                    howItWorksDetails.style.display = 'none';
+                    howItWorksButton.textContent = 'How It Works';
+                    howItWorksButton.setAttribute('aria-expanded', 'false');
+                } else {
+                    howItWorksDetails.style.display = 'block';
+                    howItWorksButton.textContent = 'Hide How It Works';
+                    howItWorksButton.setAttribute('aria-expanded', 'true');
                 }
             });
             const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');

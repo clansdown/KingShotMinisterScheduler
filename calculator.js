@@ -210,9 +210,7 @@ function allocateGeneralSpeedups(player) {
  */
 function createMinisterList(players) {
     return players.slice().sort((a, b) => {
-        const aMax = Math.max(a[CONSTRUCTION], a[RESEARCH]);
-        const bMax = Math.max(b[CONSTRUCTION], b[RESEARCH]);
-        return bMax - aMax;
+        return (b[CONSTRUCTION] + b[RESEARCH]) - (a[CONSTRUCTION] + a[RESEARCH]);
     });
 }
 
