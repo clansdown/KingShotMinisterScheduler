@@ -320,6 +320,7 @@ function processAndSchedule(players) {
      // Update UI
      updateScheduleTables(assignments, waiting);
      document.querySelectorAll('.day-section').forEach(el => el.style.display = 'block');
+     document.getElementById('day1Section').scrollIntoView({ behavior: 'smooth', block: 'start' });
      document.getElementById('loadingIndicator').style.display = 'none';
 }
 
