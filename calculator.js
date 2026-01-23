@@ -351,7 +351,7 @@ function scheduleForDay(playerList, day, role, minHours, playerAssignments, assi
             }
         }
         if (!assigned) {
-            waiting.push({ alliance: player.Alliance, player: player.Player });
+            waiting.push({ alliance: player[ALLIANCE], player: player[PLAYER] });
         }
     }
 }
@@ -518,10 +518,43 @@ function processAndSchedule(players, minHours) {
     });
     const waiting = [];
 
-    // Schedule minister for days 1,2,5
-    [1, 2, 5].forEach(day => {
-        scheduleForDay(ministerList, day, 'minister', minHours, playerAssignments, assignments, waiting);
-    });
+    // Schedule minister for days 1,2,5, trying days sequentially per player
+    const ministerDays = [1, 2, 5];
+    for (const player of ministerList) {
+        const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
+        if (playerAssignments[playerId].ministerAssigned) {
+            continue;
+        }
+        if (player[CONSTRUCTION] + player[RESEARCH] < minHours) {
+            continue;
+        }
+        let assigned = false;
+        for (const day of ministerDays) {
+            const taken = new Set(assignments[day].map(a => a.start));
+            const slots = generateTimeSlots();
+            for (const slot of slots) {
+                if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
+                    assignments[day].push({
+                        start: slot.start,
+                        end: slot.end,
+                        alliance: player[ALLIANCE],
+                        player: player[PLAYER],
+                        speedups: `${Math.round(player[CONSTRUCTION])} / ${Math.round(player[RESEARCH])}`,
+                        truegold: player[TRUEGOLD_PIECES]
+                    });
+                    playerAssignments[playerId].ministerAssigned = true;
+                    assigned = true;
+                    break;
+                }
+            }
+            if (assigned) {
+                break;
+            }
+        }
+        if (!assigned) {
+            waiting.push({ alliance: player[ALLIANCE], player: player[PLAYER] });
+        }
+    }
 
     // Schedule advisor for day 4
     scheduleForDay(advisorList, 4, 'advisor', minHours, playerAssignments, assignments, waiting);

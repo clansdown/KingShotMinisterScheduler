@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 import random
+import csv
+import sys
 
-def gaussian_clamp(mean=10, std=10, min_val=0, max_val=60):
+def gaussian_clamp(mean=15, std=10, min_val=0, max_val=60):
     val = random.gauss(mean, std)
     return max(min_val, min(max_val, int(round(val))))
+
+def generate_true_gold():
+    val = random.gauss(600, 200)
+    return max(0, min(2000, int(round(val))))
 
 def generate_name(is_warrior):
     if is_warrior:
@@ -52,19 +58,21 @@ def main():
     name_list = list(names)
     random.shuffle(name_list)
     
-    start_id = 14
+    writer = csv.writer(sys.stdout)
     for i in range(100):
-        id_str = f"{start_id + i:05d}"
         name = name_list[i]
         alliance = alliance_cycle[i]
-        speedup = gaussian_clamp()
+        general_speedup = gaussian_clamp()
+        soldier_speedup = gaussian_clamp()
+        construction_speedup = gaussian_clamp()
+        research_speedup = gaussian_clamp()
         used_for = generate_used_for()
-        gold = random.randint(1, 20)
+        true_gold = generate_true_gold()
         start_time = generate_time()
         end_time = generate_time()
         all_times = generate_all_times()
         
-        print(f"{id_str}|\t{name}\t{alliance}\t{speedup}\t{used_for}\t0\t0\t0\t{gold}\t{start_time}\t{end_time}\t{all_times}")
+        writer.writerow([alliance, name, general_speedup, used_for, soldier_speedup, construction_speedup, research_speedup, true_gold, start_time, end_time, all_times])
 
 if __name__ == "__main__":
     main()
