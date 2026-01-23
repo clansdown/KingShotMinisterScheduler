@@ -351,7 +351,17 @@ function scheduleForDay(playerList, day, role, minHours, playerAssignments, assi
             }
         }
         if (!assigned) {
-            waiting.push({ alliance: player[ALLIANCE], player: player[PLAYER] });
+            waiting.push({
+                alliance: player[ALLIANCE],
+                player: player[PLAYER],
+                speedups: {
+                    soldier: Math.round(player[SOLDIER_TRAINING]),
+                    construction: Math.round(player[CONSTRUCTION]),
+                    research: Math.round(player[RESEARCH])
+                },
+                truegold: Math.round(player[TRUEGOLD_PIECES]),
+                timeSlots: player.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ') || 'No available ranges'
+            });
         }
     }
 }
@@ -397,18 +407,18 @@ function populateTable(tableId, appointments) {
 
 /**
  * Populates the waiting list.
- * @param {Array<Object>} waiting - Array of waiting player objects {alliance, player}.
+ * @param {Array<Object>} waiting - Array of waiting player objects with speedups, truegold, timeSlots.
  */
 function populateWaitingList(waiting) {
-    const ul = document.getElementById('waitingList');
-    ul.innerHTML = '';
+    const ol = document.getElementById('waitingList');
+    ol.innerHTML = '';
     if (waiting.length === 0) {
-        ul.innerHTML = '<li>No players waiting.</li>';
+        ol.innerHTML = '<li>No players waiting.</li>';
     } else {
         waiting.forEach(player => {
             const li = document.createElement('li');
-            li.textContent = `${player.alliance}/${player.player}`;
-            ul.appendChild(li);
+            li.textContent = `${player.alliance}/${player.player} - Speedups: S:${player.speedups.soldier} C:${player.speedups.construction} R:${player.speedups.research} - TrueGold: ${player.truegold} - Time Slots: ${player.timeSlots}`;
+            ol.appendChild(li);
         });
     }
 }
@@ -419,13 +429,13 @@ function populateWaitingList(waiting) {
  */
 function updateFilteredList(filteredOut) {
     const section = document.getElementById('filteredUsersSection');
-    const list = document.getElementById('filteredUsersList');
+    const ol = document.getElementById('filteredUsersList');
     if (filteredOut.length > 0) {
-        list.innerHTML = '';
+        ol.innerHTML = '';
         filteredOut.forEach(player => {
             const li = document.createElement('li');
-            li.textContent = `${player[ALLIANCE]}/${player[PLAYER]} (Soldier Training: ${Math.round(player[SOLDIER_TRAINING])}, Construction: ${Math.round(player[CONSTRUCTION])}, Research: ${Math.round(player[RESEARCH])})`;
-            list.appendChild(li);
+            li.textContent = `${player[ALLIANCE]}/${player[PLAYER]} - Speedups: S:${Math.round(player[SOLDIER_TRAINING])} C:${Math.round(player[CONSTRUCTION])} R:${Math.round(player[RESEARCH])} - TrueGold: ${Math.round(player[TRUEGOLD_PIECES])}`;
+            ol.appendChild(li);
         });
         section.style.display = 'block';
     } else {
@@ -552,7 +562,17 @@ function processAndSchedule(players, minHours) {
             }
         }
         if (!assigned) {
-            waiting.push({ alliance: player[ALLIANCE], player: player[PLAYER] });
+            waiting.push({
+                alliance: player[ALLIANCE],
+                player: player[PLAYER],
+                speedups: {
+                    soldier: Math.round(player[SOLDIER_TRAINING]),
+                    construction: Math.round(player[CONSTRUCTION]),
+                    research: Math.round(player[RESEARCH])
+                },
+                truegold: Math.round(player[TRUEGOLD_PIECES]),
+                timeSlots: player.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ') || 'No available ranges'
+            });
         }
     }
 
