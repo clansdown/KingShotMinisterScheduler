@@ -15,7 +15,7 @@
 <body>
     <h1>KingShot Minister Scheduler</h1>
     <div class="alert alert-info" role="alert">
-        <strong>Instructions:</strong> Upload a CSV file with player data to generate minister and advisor schedules. Required columns (headers are case-sensitive):
+        <strong>Instructions:</strong> Upload a CSV file with player data to generate minister and advisor schedules. Required columns:
         <p class="mt-2">
             <span class="badge bg-secondary me-1">Alliance</span>
             <span class="badge bg-secondary me-1">Player</span>
@@ -28,9 +28,15 @@
             <span class="badge bg-secondary me-1">Time Slot Start UTC</span>
             <span class="badge bg-secondary me-1">Time Slot End UTC</span>
             <span class="badge bg-secondary">All Times</span>
-        </p>
-        <button class="btn btn-outline-primary" type="button" id="helpToggleBtn" aria-expanded="false">Show Field Help</button>
-        <a href="blank.csv" class="float-end">Download Blank CSV</a>
+         </p>
+         <div class="row">
+             <div class="col">
+                 <button class="btn btn-outline-primary" type="button" id="helpToggleBtn" aria-expanded="false">Show Field Help</button>
+             </div>
+             <div class="col text-end">
+                 (<a href="blank.csv">Download Blank CSV</a>)
+             </div>
+         </div>
         <div id="helpDetails" class="help-details" style="display: none;">
             <ul class="list-group list-group-flush mt-2">
                 <li class="list-group-item"><strong>Alliance</strong>: Player's alliance name (e.g., "MyAlliance")</li>

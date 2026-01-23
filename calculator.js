@@ -1,6 +1,24 @@
 // Debug flag - set to false to disable debug output
 const DEBUG = true;
 
+// Constants for CSV field names (normalized to lowercase)
+const PLAYER = 'player';
+const ALLIANCE = 'alliance';
+const GENERAL_SPEEDUPS = 'general speedups';
+const GENERAL_USED_FOR = 'general used for';
+const SOLDIER_TRAINING = 'soldier training';
+const CONSTRUCTION = 'construction';
+const RESEARCH = 'research';
+const TRUEGOLD_PIECES = 'truegold pieces';
+const TIME_SLOT_START_UTC = 'time slot start utc';
+const TIME_SLOT_END_UTC = 'time slot end utc';
+const ALL_TIMES = 'all times';
+
+// Constants for categories in 'General Used For'
+const CATEGORY_SOLDIER_TRAINING = 'soldier training';
+const CATEGORY_CONSTRUCTION = 'construction';
+const CATEGORY_RESEARCH = 'research';
+
 /**
  * Parses a CSV text into an array of objects, handling quoted fields and auto-detecting delimiter (comma or tab).
  * @param {string} csvText - The raw CSV text from the file.
@@ -55,20 +73,20 @@ function parseCsvToObjects(csvText) {
         if (fields.length === headers.length) {
             const player = {};
             headers.forEach((header, index) => {
-                player[header] = fields[index];
+                player[header.toLowerCase().trim()] = fields[index];
             });
             // Convert numeric fields
-            player['General Speedups'] = parseFloat(player['General Speedups']) || 0;
-            player['Soldier Training'] = parseFloat(player['Soldier Training']) || 0;
-            player['Construction'] = parseFloat(player['Construction']) || 0;
-            player['Research'] = parseFloat(player['Research']) || 0;
-            player['TrueGold Pieces'] = parseFloat(player['TrueGold Pieces']) || 0;
-             // Parse availableTimeRanges from 'All Times'
-             player.availableTimeRanges = parseTimeRanges(player['All Times']);
-             // Union with overall time window
-             const overallRanges = parseTimeRanges(`${player['Time Slot Start UTC']}-${player['Time Slot End UTC']}`);
-             player.availableTimeRanges = unionTimeRanges(overallRanges.concat(player.availableTimeRanges));
-             players.push(player);
+            player[GENERAL_SPEEDUPS] = parseFloat(player[GENERAL_SPEEDUPS]) || 0;
+            player[SOLDIER_TRAINING] = parseFloat(player[SOLDIER_TRAINING]) || 0;
+            player[CONSTRUCTION] = parseFloat(player[CONSTRUCTION]) || 0;
+            player[RESEARCH] = parseFloat(player[RESEARCH]) || 0;
+            player[TRUEGOLD_PIECES] = parseFloat(player[TRUEGOLD_PIECES]) || 0;
+              // Parse availableTimeRanges from 'All Times'
+              player.availableTimeRanges = parseTimeRanges(player[ALL_TIMES]);
+              // Union with overall time window
+              const overallRanges = parseTimeRanges(`${player[TIME_SLOT_START_UTC]}-${player[TIME_SLOT_END_UTC]}`);
+              player.availableTimeRanges = unionTimeRanges(overallRanges.concat(player.availableTimeRanges));
+              players.push(player);
         }
     }
     return players;
@@ -149,33 +167,33 @@ function normalizeTime(timeStr) {
  * @param {Object} player - The player object to modify.
  */
 function allocateGeneralSpeedups(player) {
-    const usedFor = player['General Used For'].split(',').map(s => s.trim());
+    const usedFor = player[GENERAL_USED_FOR].split(',').map(s => s.trim().toLowerCase());
     const numCategories = usedFor.length;
-    const speedups = player['General Speedups'];
+    const speedups = player[GENERAL_SPEEDUPS];
     if (numCategories === 0) {
         // No categories, do nothing or even split? But user said "if three or none, allocate with an even split" – but none might mean all?
         // Assume even split to all three if none specified.
         const split = speedups / 3;
-        player['Soldier Training'] += split;
-        player['Construction'] += split;
-        player['Research'] += split;
+        player[SOLDIER_TRAINING] += split;
+        player[CONSTRUCTION] += split;
+        player[RESEARCH] += split;
     } else if (numCategories === 2) {
         const split60 = speedups * 0.6;
         const split40 = speedups * 0.4;
         const firstCat = usedFor[0];
         const secondCat = usedFor[1];
-        if (firstCat === 'Soldier Training') player['Soldier Training'] += split60;
-        else if (firstCat === 'Construction') player['Construction'] += split60;
-        else if (firstCat === 'Research') player['Research'] += split60;
-        if (secondCat === 'Soldier Training') player['Soldier Training'] += split40;
-        else if (secondCat === 'Construction') player['Construction'] += split40;
-        else if (secondCat === 'Research') player['Research'] += split40;
+        if (firstCat === CATEGORY_SOLDIER_TRAINING) player[SOLDIER_TRAINING] += split60;
+        else if (firstCat === CATEGORY_CONSTRUCTION) player[CONSTRUCTION] += split60;
+        else if (firstCat === CATEGORY_RESEARCH) player[RESEARCH] += split60;
+        if (secondCat === CATEGORY_SOLDIER_TRAINING) player[SOLDIER_TRAINING] += split40;
+        else if (secondCat === CATEGORY_CONSTRUCTION) player[CONSTRUCTION] += split40;
+        else if (secondCat === CATEGORY_RESEARCH) player[RESEARCH] += split40;
     } else {
         const split = speedups / numCategories;
         usedFor.forEach(cat => {
-            if (cat === 'Soldier Training') player['Soldier Training'] += split;
-            else if (cat === 'Construction') player['Construction'] += split;
-            else if (cat === 'Research') player['Research'] += split;
+            if (cat === CATEGORY_SOLDIER_TRAINING) player[SOLDIER_TRAINING] += split;
+            else if (cat === CATEGORY_CONSTRUCTION) player[CONSTRUCTION] += split;
+            else if (cat === CATEGORY_RESEARCH) player[RESEARCH] += split;
         });
     }
 }
@@ -187,8 +205,8 @@ function allocateGeneralSpeedups(player) {
  */
 function createMinisterList(players) {
     return players.slice().sort((a, b) => {
-        const aMax = Math.max(a['Construction'], a['Research']);
-        const bMax = Math.max(b['Construction'], b['Research']);
+        const aMax = Math.max(a[CONSTRUCTION], a[RESEARCH]);
+        const bMax = Math.max(b[CONSTRUCTION], b[RESEARCH]);
         return bMax - aMax;
     });
 }
@@ -199,7 +217,7 @@ function createMinisterList(players) {
  * @returns {Array<Object>} Sorted advisor list.
  */
 function createAdvisorList(players) {
-    return players.slice().sort((a, b) => b['Soldier Training'] - a['Soldier Training']);
+    return players.slice().sort((a, b) => b[SOLDIER_TRAINING] - a[SOLDIER_TRAINING]);
 }
 
 /**
@@ -242,8 +260,8 @@ function timeToMinutes(time) {
 function isSlotAvailable(player, slotStart, slotEnd) {
     const slotStartMin = timeToMinutes(slotStart);
     const slotEndMin = timeToMinutes(slotEnd);
-    const overallStart = timeToMinutes(player['Time Slot Start UTC']);
-    const overallEnd = timeToMinutes(player['Time Slot End UTC']);
+    const overallStart = timeToMinutes(player[TIME_SLOT_START_UTC]);
+    const overallEnd = timeToMinutes(player[TIME_SLOT_END_UTC]);
 
     // Check overall window (for crossing slots, endMin might be 0, handle accordingly)
     const adjustedSlotEndMin = slotEndMin < slotStartMin ? slotEndMin + 1440 : slotEndMin;
@@ -294,7 +312,7 @@ function scheduleForDay(playerList, day, role, playerAssignments, assignments, w
     const slots = generateTimeSlots();
     const taken = new Set(); // Set of start times taken
     for (const player of playerList) {
-        const playerId = `${player.Player}-${player.Alliance}`;
+        const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
         if (playerAssignments[playerId][role + 'Assigned']) {
             continue; // Already assigned this role
         }
@@ -304,8 +322,8 @@ function scheduleForDay(playerList, day, role, playerAssignments, assignments, w
                 assignments[day].push({
                     start: slot.start,
                     end: slot.end,
-                    alliance: player.Alliance,
-                    player: player.Player
+                    alliance: player[ALLIANCE],
+                    player: player[PLAYER]
                 });
                 taken.add(slot.start);
                 playerAssignments[playerId][role + 'Assigned'] = true;
@@ -377,7 +395,7 @@ function updateFilteredList(filteredOut) {
         list.innerHTML = '';
         filteredOut.forEach(player => {
             const li = document.createElement('li');
-            li.textContent = `${player.Alliance}/${player.Player}`;
+            li.textContent = `${player[ALLIANCE]}/${player[PLAYER]}`;
             list.appendChild(li);
         });
         section.style.display = 'block';
@@ -412,7 +430,7 @@ function populateDebugTable(players) {
     const tbody = debugDiv.querySelector('#debugTable tbody');
     players.forEach(player => {
         const row = tbody.insertRow();
-        row.insertCell(0).textContent = `${player.Alliance}/${player.Player}`;
+        row.insertCell(0).textContent = `${player[ALLIANCE]}/${player[PLAYER]}`;
         const timeSlots = player.availableTimeRanges.length > 0
             ? player.availableTimeRanges.map(range => `${range.start}-${range.end}`).join(', ')
             : 'No available ranges';
@@ -433,7 +451,7 @@ function processAndSchedule(players, minHours) {
     players.forEach(allocateGeneralSpeedups);
 
     // Filter players based on minimum hours
-    const filtered = players.filter(player => (player['Construction'] + player['Research'] >= minHours) || (player['Soldier Training'] >= minHours));
+    const filtered = players.filter(player => (player[CONSTRUCTION] + player[RESEARCH] >= minHours) || (player[SOLDIER_TRAINING] >= minHours));
     const filteredOut = players.filter(player => !filtered.includes(player));
 
     // Create lists from filtered players
@@ -447,7 +465,7 @@ function processAndSchedule(players, minHours) {
     const assignments = { 1: [], 2: [], 4: [], 5: [] };
     const playerAssignments = {};
     filtered.forEach(player => {
-        const playerId = `${player.Player}-${player.Alliance}`;
+        const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
         playerAssignments[playerId] = { ministerAssigned: false, advisorAssigned: false };
     });
     const waiting = [];
