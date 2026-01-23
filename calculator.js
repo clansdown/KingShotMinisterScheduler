@@ -1,3 +1,6 @@
+// Debug flag - set to false to disable debug output
+const DEBUG = true;
+
 /**
  * Parses a CSV text into an array of objects, handling quoted fields and auto-detecting delimiter (comma or tab).
  * @param {string} csvText - The raw CSV text from the file.
@@ -60,9 +63,12 @@ function parseCsvToObjects(csvText) {
             player['Construction'] = parseFloat(player['Construction']) || 0;
             player['Research'] = parseFloat(player['Research']) || 0;
             player['TrueGold Pieces'] = parseFloat(player['TrueGold Pieces']) || 0;
-            // Parse availableTimeRanges from 'All Times'
-            player.availableTimeRanges = parseTimeRanges(player['All Times']);
-            players.push(player);
+             // Parse availableTimeRanges from 'All Times'
+             player.availableTimeRanges = parseTimeRanges(player['All Times']);
+             // Union with overall time window
+             const overallRanges = parseTimeRanges(`${player['Time Slot Start UTC']}-${player['Time Slot End UTC']}`);
+             player.availableTimeRanges = unionTimeRanges(overallRanges.concat(player.availableTimeRanges));
+             players.push(player);
         }
     }
     return players;
@@ -70,18 +76,70 @@ function parseCsvToObjects(csvText) {
 
 /**
  * Parses the 'All Times' field into an array of time range objects.
- * @param {string} allTimes - Comma-separated time ranges, e.g., "00:00-12:00,18:00-23:59".
+ * Handles raw hours (e.g., "19" -> "19:00"), clamps hours to 0-23 using modulo 24,
+ * and splits overnight ranges (start >= end) into two: start to 23:59 and 00:00 to end.
+ * @param {string} allTimes - Comma-separated time ranges, e.g., "00:00-12:00,19-2".
  * @returns {Array<Object>} Array of {start: string, end: string} in HH:MM format.
  */
 function parseTimeRanges(allTimes) {
+    console.log('Parsing time ranges from:', allTimes);
     if (!allTimes) {
         return [];
     }
-    const stripped = allTimes.replace(/\s/g, ''); // Strip whitespace
-    return stripped.split(',').map(range => {
+    const cleaned = allTimes.replace(/\s*(or|and|&)\s*/gi, ',').replace(/\//g, ','); // Replace delimiters and / with comma
+    const stripped = cleaned.replace(/[^0-9:,\-]/g, ''); // Strip invalid characters
+    const ranges = [];
+    stripped.split(',').forEach(range => {
         const parts = range.split('-');
-        return { start: parts[0], end: parts[1] };
+        if (parts.length !== 2) return; // Skip invalid ranges
+        const start = normalizeTime(parts[0]);
+        const end = normalizeTime(parts[1]);
+        const startMin = timeToMinutes(start);
+        const endMin = timeToMinutes(end);
+        console.log(`Parsed range: ${range} -> ${parts} -> start: ${start} (${startMin}), end: ${end} (${endMin})`);
+        if (startMin < endMin) {
+            ranges.push({ start, end });
+        } else {
+            ranges.push({ start, end: '23:59' });
+            ranges.push({ start: '00:00', end });
+        }
     });
+    console.log('Parsed time ranges:', allTimes,ranges);
+    return ranges;
+}
+
+/**
+ * Unions an array of time range objects by removing exact duplicates and sorting.
+ * Does not merge overlapping or adjacent ranges.
+ * @param {Array<Object>} ranges - Array of {start: string, end: string} in HH:MM format.
+ * @returns {Array<Object>} Deduplicated and sorted array of {start: string, end: string}.
+ */
+function unionTimeRanges(ranges) {
+    const seen = new Set();
+    const unique = [];
+    ranges.forEach(range => {
+        const key = `${range.start}-${range.end}`;
+        if (!seen.has(key)) {
+            seen.add(key);
+            unique.push(range);
+        }
+    });
+    unique.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+    return unique;
+}
+
+/**
+ * Normalizes a time string to HH:MM format, clamping hours to 0-23.
+ * @param {string} timeStr - Time string, e.g., "19" or "19:30".
+ * @returns {string} Normalized time in HH:MM format.
+ */
+function normalizeTime(timeStr) {
+    let [h, m] = timeStr.split(':').map(Number);
+    if (isNaN(h)) h = 0;
+    if (isNaN(m)) m = 0;
+    h = Math.max(0, Math.min(23, h)); // Clamp to 0-23
+    m = Math.max(0, Math.min(59, m)); // Clamp minutes to 0-59
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 }
 
 /**
@@ -175,6 +233,7 @@ function timeToMinutes(time) {
 
 /**
  * Checks if a time slot is available for a player based on their time ranges and overall window.
+ * Handles crossing slots (e.g., 23:30-00:00) by checking late-night and early-morning availability.
  * @param {Object} player - The player object.
  * @param {string} slotStart - Slot start time HH:MM.
  * @param {string} slotEnd - Slot end time HH:MM.
@@ -186,8 +245,10 @@ function isSlotAvailable(player, slotStart, slotEnd) {
     const overallStart = timeToMinutes(player['Time Slot Start UTC']);
     const overallEnd = timeToMinutes(player['Time Slot End UTC']);
 
-    // Check overall window
-    if (slotStartMin < overallStart || slotEndMin > overallEnd) {
+    // Check overall window (for crossing slots, endMin might be 0, handle accordingly)
+    const adjustedSlotEndMin = slotEndMin < slotStartMin ? slotEndMin + 1440 : slotEndMin;
+    const adjustedOverallEnd = overallEnd < overallStart ? overallEnd + 1440 : overallEnd;
+    if (slotStartMin < overallStart || adjustedSlotEndMin > adjustedOverallEnd) {
         return false;
     }
 
@@ -197,11 +258,27 @@ function isSlotAvailable(player, slotStart, slotEnd) {
     }
 
     // Check if slot fits within any range
-    return player.availableTimeRanges.some(range => {
-        const rangeStartMin = timeToMinutes(range.start);
-        const rangeEndMin = timeToMinutes(range.end);
-        return slotStartMin >= rangeStartMin && slotEndMin <= rangeEndMin;
-    });
+    if (slotEndMin > slotStartMin) {
+        // Normal slot
+        return player.availableTimeRanges.some(range => {
+            const rangeStartMin = timeToMinutes(range.start);
+            const rangeEndMin = timeToMinutes(range.end);
+            return slotStartMin >= rangeStartMin && slotEndMin <= rangeEndMin;
+        });
+    } else {
+        // Crossing slot: check late-night (slotStart to 23:59) and early-morning (00:00 to slotEnd)
+        const hasLate = player.availableTimeRanges.some(range => {
+            const rangeStartMin = timeToMinutes(range.start);
+            const rangeEndMin = timeToMinutes(range.end);
+            return slotStartMin >= rangeStartMin && rangeEndMin >= slotStartMin;
+        });
+        const hasEarly = player.availableTimeRanges.some(range => {
+            const rangeStartMin = timeToMinutes(range.start);
+            const rangeEndMin = timeToMinutes(range.end);
+            return rangeStartMin <= 0 && slotEndMin <= rangeEndMin;
+        });
+        return hasLate && hasEarly;
+    }
 }
 
 /**
@@ -249,6 +326,7 @@ function scheduleForDay(playerList, day, role, playerAssignments, assignments, w
  */
 function updateScheduleTables(assignments, waiting) {
     [1, 2, 4, 5].forEach(day => {
+        assignments[day].sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
         populateTable(`day${day}Table`, assignments[day]);
     });
     populateWaitingList(waiting);
@@ -289,6 +367,43 @@ function populateWaitingList(waiting) {
 }
 
 /**
+ * Populates the debug table with player time slots if DEBUG is true.
+ * Dynamically creates and inserts the debug section before Day 1.
+ * @param {Array<Object>} players - Array of player objects.
+ */
+function populateDebugTable(players) {
+    if (!DEBUG) return;
+
+    const debugDiv = document.createElement('div');
+    debugDiv.className = 'day-section debug-section';
+    debugDiv.innerHTML = `
+        <h2>Debug: Player Time Slots (before Day 1 scheduling)</h2>
+        <table id="debugTable" class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Player/Alliance</th>
+                    <th>Time Slots</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    `;
+
+    const tbody = debugDiv.querySelector('#debugTable tbody');
+    players.forEach(player => {
+        const row = tbody.insertRow();
+        row.insertCell(0).textContent = `${player.Alliance}/${player.Player}`;
+        const timeSlots = player.availableTimeRanges.length > 0
+            ? player.availableTimeRanges.map(range => `${range.start}-${range.end}`).join(', ')
+            : 'No available ranges';
+        row.insertCell(1).textContent = timeSlots;
+    });
+
+    const day1Section = document.getElementById('day1Section');
+    day1Section.parentNode.insertBefore(debugDiv, day1Section);
+}
+
+/**
  * Processes players, allocates speedups, creates lists, and schedules appointments.
  * @param {Array<Object>} players - Array of player objects from CSV.
  */
@@ -299,6 +414,9 @@ function processAndSchedule(players) {
     // Create lists
     const ministerList = createMinisterList(players);
     const advisorList = createAdvisorList(players);
+
+    // Debug: Show player time slots before Day 1 scheduling
+    populateDebugTable(players);
 
     // Initialize assignments and tracking
     const assignments = { 1: [], 2: [], 4: [], 5: [] };

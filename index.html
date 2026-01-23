@@ -15,20 +15,36 @@
 <body>
     <h1>KingShot Minister Scheduler</h1>
     <div class="alert alert-info" role="alert">
-        <strong>Instructions:</strong> Upload a CSV file with player data to generate minister and advisor schedules. The CSV must include the following columns (headers are case-sensitive):
-        <ul class="list-group list-group-flush mt-2">
-            <li class="list-group-item"><strong>Alliance</strong>: Player's alliance name (e.g., "MyAlliance")</li>
-            <li class="list-group-item"><strong>Player</strong>: Player's name (e.g., "Player1")</li>
-            <li class="list-group-item"><strong>General Speedups</strong>: Number of general speedups (e.g., 10)</li>
-            <li class="list-group-item"><strong>Soldier Training</strong>: Base soldier training speedups (e.g., 5)</li>
-            <li class="list-group-item"><strong>Construction</strong>: Base construction speedups (e.g., 3)</li>
-            <li class="list-group-item"><strong>Research</strong>: Base research speedups (e.g., 2)</li>
-            <li class="list-group-item"><strong>TrueGold Pieces</strong>: Number of TrueGold pieces (e.g., 1)</li>
-            <li class="list-group-item"><strong>All Times</strong>: Available time ranges (comma-separated, e.g., "00:00-12:00,18:00-23:59")</li>
-            <li class="list-group-item"><strong>General Used For</strong>: Categories for general speedups (comma-separated from: Soldier Training, Construction, Research; e.g., "Construction,Research")</li>
-            <li class="list-group-item"><strong>Time Slot Start UTC</strong>: Overall start time in HH:MM (e.g., "00:00")</li>
-            <li class="list-group-item"><strong>Time Slot End UTC</strong>: Overall end time in HH:MM (e.g., "23:59")</li>
-        </ul>
+        <strong>Instructions:</strong> Upload a CSV file with player data to generate minister and advisor schedules. Required columns (headers are case-sensitive):
+        <p class="mt-2">
+            <span class="badge bg-secondary me-1">Alliance</span>
+            <span class="badge bg-secondary me-1">Player</span>
+            <span class="badge bg-secondary me-1">General Speedups</span>
+            <span class="badge bg-secondary me-1">General Used For</span>
+            <span class="badge bg-secondary me-1">Soldier Training</span>
+            <span class="badge bg-secondary me-1">Construction</span>
+            <span class="badge bg-secondary me-1">Research</span>
+            <span class="badge bg-secondary me-1">TrueGold Pieces</span>
+            <span class="badge bg-secondary me-1">Time Slot Start UTC</span>
+            <span class="badge bg-secondary me-1">Time Slot End UTC</span>
+            <span class="badge bg-secondary">All Times</span>
+        </p>
+        <button class="btn btn-outline-primary" type="button" id="helpToggleBtn" aria-expanded="false">Show Field Help</button>
+        <div id="helpDetails" class="help-details" style="display: none;">
+            <ul class="list-group list-group-flush mt-2">
+                <li class="list-group-item"><strong>Alliance</strong>: Player's alliance name (e.g., "MyAlliance")</li>
+                <li class="list-group-item"><strong>Player</strong>: Player's name (e.g., "Player1")</li>
+                <li class="list-group-item"><strong>General Speedups</strong>: Number of general speedups (e.g., 10)</li>
+                <li class="list-group-item"><strong>General Used For</strong>: Categories for general speedups (comma-separated from: Soldier Training, Construction, Research; e.g., "Construction,Research")</li>
+                <li class="list-group-item"><strong>Soldier Training</strong>: Base soldier training speedups (e.g., 5)</li>
+                <li class="list-group-item"><strong>Construction</strong>: Base construction speedups (e.g., 3)</li>
+                <li class="list-group-item"><strong>Research</strong>: Base research speedups (e.g., 2)</li>
+                <li class="list-group-item"><strong>TrueGold Pieces</strong>: Number of TrueGold pieces (e.g., 1)</li>
+                <li class="list-group-item"><strong>Time Slot Start UTC</strong>: Overall start time in HH:MM (e.g., "00:00")</li>
+                <li class="list-group-item"><strong>Time Slot End UTC</strong>: Overall end time in HH:MM (e.g., "23:59")</li>
+                 <li class="list-group-item"><strong>All Times</strong>: Available time ranges (comma-separated, supports raw hours like "19-2" for overnight 19:00-23:59 and 00:00-02:00, or full HH:MM like "00:00-12:00,18:00-23:59"; hours are clamped to 0-23)</li>
+            </ul>
+        </div>
     </div>
     <input type="file" id="csvFileInput" accept=".csv" class="form-control">
     <div id="loadingIndicator" style="display: none;">Processing...</div>
@@ -96,5 +112,23 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7PVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
     <script src="calculator.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const button = document.getElementById('helpToggleBtn');
+            const details = document.getElementById('helpDetails');
+            button.addEventListener('click', function() {
+                const isExpanded = button.getAttribute('aria-expanded') === 'true';
+                if (isExpanded) {
+                    details.style.display = 'none';
+                    button.textContent = 'Show Field Help';
+                    button.setAttribute('aria-expanded', 'false');
+                } else {
+                    details.style.display = 'block';
+                    button.textContent = 'Hide Field Help';
+                    button.setAttribute('aria-expanded', 'true');
+                }
+            });
+        });
+    </script>
 </body>
 </html>
