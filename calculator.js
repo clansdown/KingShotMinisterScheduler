@@ -95,7 +95,8 @@ function parseCsvToObjects(csvText) {
 /**
  * Parses the 'All Times' field into an array of time range objects.
  * Handles raw hours (e.g., "19" -> "19:00"), clamps hours to 0-23 using modulo 24,
- * and splits overnight ranges (start >= end) into two: start to 23:59 and 00:00 to end.
+ * and splits overnight ranges (start >= end) into two: start to 23:59 and 00:00 to end,
+ * unless the end is exactly 00:00, in which case it's treated as a single range to 23:59.
  * @param {string} allTimes - Comma-separated time ranges, e.g., "00:00-12:00,19-2".
  * @returns {Array<Object>} Array of {start: string, end: string} in HH:MM format.
  */
@@ -119,7 +120,9 @@ function parseTimeRanges(allTimes) {
             ranges.push({ start, end });
         } else {
             ranges.push({ start, end: '23:59' });
-            ranges.push({ start: '00:00', end });
+            if (end !== '00:00') {
+                ranges.push({ start: '00:00', end });
+            }
         }
     });
     console.log('Parsed time ranges:', allTimes,ranges);
@@ -167,7 +170,9 @@ function normalizeTime(timeStr) {
  * @param {Object} player - The player object to modify.
  */
 function allocateGeneralSpeedups(player) {
-    const usedFor = player[GENERAL_USED_FOR].split(',').map(s => s.trim().toLowerCase());
+    let usedFor = player[GENERAL_USED_FOR].split(',').map(s => s.trim().toLowerCase());
+    usedFor = usedFor.map(s => s === 'training' ? 'soldier training' : s);
+    usedFor = usedFor.filter(s => s !== '');
     const numCategories = usedFor.length;
     const speedups = player[GENERAL_SPEEDUPS];
     if (numCategories === 0) {
@@ -304,11 +309,12 @@ function isSlotAvailable(player, slotStart, slotEnd) {
  * @param {Array<Object>} playerList - Sorted list of players for the role.
  * @param {number} day - The day number (1,2,4,5).
  * @param {string} role - 'minister' or 'advisor'.
+ * @param {number} minHours - Minimum hours required for the role.
  * @param {Object} playerAssignments - Map of player IDs to assignment status.
  * @param {Object} assignments - Object to store assigned slots per day.
  * @param {Array} waiting - Array to collect waiting players.
  */
-function scheduleForDay(playerList, day, role, playerAssignments, assignments, waiting) {
+function scheduleForDay(playerList, day, role, minHours, playerAssignments, assignments, waiting) {
     const slots = generateTimeSlots();
     const taken = new Set(); // Set of start times taken
     for (const player of playerList) {
@@ -316,15 +322,30 @@ function scheduleForDay(playerList, day, role, playerAssignments, assignments, w
         if (playerAssignments[playerId][role + 'Assigned']) {
             continue; // Already assigned this role
         }
+        // Check role-specific qualification
+        if (role === 'minister' && (player[CONSTRUCTION] + player[RESEARCH] < minHours)) {
+            continue;
+        }
+        if (role === 'advisor' && (player[SOLDIER_TRAINING] < minHours)) {
+            continue;
+        }
         let assigned = false;
         for (const slot of slots) {
             if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
-                assignments[day].push({
-                    start: slot.start,
-                    end: slot.end,
-                    alliance: player[ALLIANCE],
-                    player: player[PLAYER]
-                });
+                let speedups;
+                if (role === 'advisor') {
+                    speedups = Math.round(player[SOLDIER_TRAINING]);
+                } else {
+                    speedups = `${Math.round(player[CONSTRUCTION])} / ${Math.round(player[RESEARCH])}`;
+                }
+                 assignments[day].push({
+                     start: slot.start,
+                     end: slot.end,
+                     alliance: player[ALLIANCE],
+                     player: player[PLAYER],
+                     speedups: speedups,
+                     truegold: player[TRUEGOLD_PIECES]
+                 });
                 taken.add(slot.start);
                 playerAssignments[playerId][role + 'Assigned'] = true;
                 assigned = true;
@@ -358,12 +379,22 @@ function updateScheduleTables(assignments, waiting) {
 function populateTable(tableId, appointments) {
     const tbody = document.querySelector(`#${tableId} tbody`);
     tbody.innerHTML = '';
-    appointments.forEach(app => {
+    if (appointments.length === 0) {
         const row = tbody.insertRow();
-        row.insertCell(0).textContent = app.start;
-        row.insertCell(1).textContent = app.end;
-        row.insertCell(2).textContent = `${app.alliance}/${app.player}`;
-    });
+        const cell = row.insertCell(0);
+        cell.textContent = 'No Assignments';
+        cell.colSpan = tableId === 'day4Table' ? 3 : 4;
+    } else {
+        appointments.forEach(app => {
+            const row = tbody.insertRow();
+            row.insertCell(0).textContent = `${app.start}–${app.end}`;
+            row.insertCell(1).textContent = `${app.alliance}/${app.player}`;
+            row.insertCell(2).textContent = app.speedups;
+            if (tableId !== 'day4Table') {
+                row.insertCell(3).textContent = app.truegold;
+            }
+        });
+    }
 }
 
 /**
@@ -395,7 +426,7 @@ function updateFilteredList(filteredOut) {
         list.innerHTML = '';
         filteredOut.forEach(player => {
             const li = document.createElement('li');
-            li.textContent = `${player[ALLIANCE]}/${player[PLAYER]}`;
+            li.textContent = `${player[ALLIANCE]}/${player[PLAYER]} (Soldier Training: ${Math.round(player[SOLDIER_TRAINING])}, Construction: ${Math.round(player[CONSTRUCTION])}, Research: ${Math.round(player[RESEARCH])})`;
             list.appendChild(li);
         });
         section.style.display = 'block';
@@ -406,20 +437,29 @@ function updateFilteredList(filteredOut) {
 
 /**
  * Populates the debug table with player time slots if DEBUG is true.
- * Dynamically creates and inserts the debug section before Day 1.
+ * Targets the existing #playerInfoSection div in HTML.
  * @param {Array<Object>} players - Array of player objects.
  */
 function populateDebugTable(players) {
     if (!DEBUG) return;
 
-    const debugDiv = document.createElement('div');
-    debugDiv.className = 'day-section debug-section';
-    debugDiv.innerHTML = `
-        <h2>Debug: Player Time Slots (before Day 1 scheduling)</h2>
+    const section = document.getElementById('playerInfoSection');
+    if (!section) {
+        console.error('Player info section not found');
+        return;
+    }
+    section.innerHTML = `
+        <h2>Player Information</h2>
         <table id="debugTable" class="table table-striped">
             <thead>
                 <tr>
                     <th>Player/Alliance</th>
+                    <th>General</th>
+                    <th>General Used For</th>
+                    <th>Training</th>
+                    <th>Construction</th>
+                    <th>Research</th>
+                    <th>TrueGold</th>
                     <th>Time Slots</th>
                 </tr>
             </thead>
@@ -427,18 +467,28 @@ function populateDebugTable(players) {
         </table>
     `;
 
-    const tbody = debugDiv.querySelector('#debugTable tbody');
-    players.forEach(player => {
+    const tbody = section.querySelector('#debugTable tbody');
+    const sortedPlayers = players.slice().sort((a, b) => {
+        const aStr = `${a[ALLIANCE]}/${a[PLAYER]}`;
+        const bStr = `${b[ALLIANCE]}/${b[PLAYER]}`;
+        return aStr.localeCompare(bStr, undefined, { sensitivity: 'base' });
+    });
+    sortedPlayers.forEach(player => {
         const row = tbody.insertRow();
         row.insertCell(0).textContent = `${player[ALLIANCE]}/${player[PLAYER]}`;
+        row.insertCell(1).textContent = Math.round(player[GENERAL_SPEEDUPS]);
+        row.insertCell(2).textContent = player[GENERAL_USED_FOR];
+        row.insertCell(3).textContent = Math.round(player[SOLDIER_TRAINING]);
+        row.insertCell(4).textContent = Math.round(player[CONSTRUCTION]);
+        row.insertCell(5).textContent = Math.round(player[RESEARCH]);
+        row.insertCell(6).textContent = Math.round(player[TRUEGOLD_PIECES]);
         const timeSlots = player.availableTimeRanges.length > 0
             ? player.availableTimeRanges.map(range => `${range.start}-${range.end}`).join(', ')
             : 'No available ranges';
-        row.insertCell(1).textContent = timeSlots;
+        row.insertCell(7).textContent = timeSlots;
     });
 
-    const day1Section = document.getElementById('day1Section');
-    day1Section.parentNode.insertBefore(debugDiv, day1Section);
+    section.style.display = 'block';
 }
 
 /**
@@ -472,18 +522,18 @@ function processAndSchedule(players, minHours) {
 
     // Schedule minister for days 1,2,5
     [1, 2, 5].forEach(day => {
-        scheduleForDay(ministerList, day, 'minister', playerAssignments, assignments, waiting);
+        scheduleForDay(ministerList, day, 'minister', minHours, playerAssignments, assignments, waiting);
     });
 
     // Schedule advisor for day 4
-    scheduleForDay(advisorList, 4, 'advisor', playerAssignments, assignments, waiting);
+    scheduleForDay(advisorList, 4, 'advisor', minHours, playerAssignments, assignments, waiting);
 
      // Update UI
      updateScheduleTables(assignments, waiting);
      updateFilteredList(filteredOut);
-     document.querySelectorAll('.day-section').forEach(el => el.style.display = 'block');
-     document.getElementById('day1Section').scrollIntoView({ behavior: 'smooth', block: 'start' });
-     document.getElementById('loadingIndicator').style.display = 'none';
+      document.querySelectorAll('.day-section').forEach(el => el.style.display = 'block');
+      document.getElementById('day1HeadingWrapper').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.getElementById('loadingIndicator').style.display = 'none';
 }
 
 // Event listener for file input
