@@ -1,0 +1,112 @@
+Player	Alliance	General Speedups	General Used For	Soldier Training	Construction	Research	TrueGold Pieces	Time Slot Start UTC	Time Slot End UTC	All Times
+John	AllianceA	100	Construction,Research	0	0	0	10	00:00	23:59	00:00-12:00,18:00-23:59
+Jane	AllianceA	50	Soldier Training	0	0	0	5	06:00	18:00	06:00-12:00
+Bob	AllianceB	200	Construction	0	0	0	20	00:00	23:59	
+Alice	AllianceB	75	Construction,Research,Soldier Training	0	0	0	15	09:00	21:00	09:00-12:00,15:00-18:00
+Eve	AllianceC	150	Research	0	0	0	12	22:00	02:00	19-2
+Frank	AllianceC	80	Soldier Training,Construction	0	0	0	8	00:00	23:59	9-12,18-22
+Grace	AllianceD	120	Construction	0	0	0	18	06:00	20:00	19-2,09:00-12:00
+Henry	AllianceD	60	Research	0	0	0	6	00:00	23:59	0-23
+Iris	AllianceE	90	Soldier Training	0	0	0	9	10:00	22:00	22-5
+Jack	AllianceE	110	Construction,Research	0	0	0	11	00:00	23:59	8-10,19-2,14:00-16:00
+Kyle	AllianceF	70	Soldier Training	0	0	0	7	00:00	23:59	16-36
+Liam	AllianceF	85	Construction	0	0	0	8	00:00	23:59	25-100014|	Dragonlord	HUM	0	Construction	0	0	0	14	07:38	23:14	03:19-11:48,07:08-18:54
+00015|	Rowan	DWA	22	Soldier Training,Construction,Research	0	0	0	12	01:58	04:53	23:58-05:14,15:21-22:24
+00016|	Carter	DWA	7	Research	0	0	0	18	15:16	16:24	17:21-19:07,08:05-11:41
+00017|	Ulysses	HUM	31	Research,Construction	0	0	0	4	00:28	21:29	08:22-13:13,22:14-01:51
+00018|	Frostbane	DWA	21	Construction,Soldier Training	0	0	0	2	07:37	14:38	09:18-15:51,14:44-17:45
+00019|	Nightstrike	PAL	19	Research,Soldier Training	0	0	0	12	21:04	16:23	00:32-23:20,22:56-00:08
+00020|	Steelaxe	MAG	22	Construction	0	0	0	4	03:22	07:09	05:07-07:31,04:37-16:26
+00021|	Thunderlord	WAR	11	Construction	0	0	0	13	12:11	20:33	07:25-04:04,09:51-03:01
+00022|	Tristan	HUM	7	Soldier Training	0	0	0	9	09:06	17:34	15:43-01:58,02:53-22:11
+00023|	Blake	ROG	5	Research,Construction	0	0	0	18	18:15	21:58	10:24-02:47,17:13-07:39
+00024|	Ironclaw	WAR	6	Construction,Soldier Training	0	0	0	14	09:52	14:12	21:15-01:02,07:45-13:18
+00025|	Zane	PAL	19	Research,Soldier Training	0	0	0	7	21:27	22:59	18:59-23:05,17:23-05:57
+00026|	Shadowfury	MAG	2	Soldier Training,Construction,Research	0	0	0	2	10:38	10:36	16:43-05:36,08:57-17:57
+00027|	Avery	ELF	0	Research	0	0	0	12	21:58	16:02	23:50-05:23,17:44-06:28
+00028|	Thunderrage	ELF	0	Construction,Soldier Training	0	0	0	7	19:34	22:22	18:42-10:03,21:15-17:20
+00029|	Steelstrike	WAR	15	Soldier Training,Construction,Research	0	0	0	10	14:47	14:05	18:43-17:01,09:19-00:34
+00030|	Frostlord	ELF	6	Soldier Training,Construction	0	0	0	14	23:12	21:15	02:01-09:25,03:47-15:39
+00031|	Jasper	MAG	24	Construction,Research	0	0	0	17	20:43	08:07	12:32-08:43,23:25-00:20
+00032|	Steelrage	ROG	17	Research	0	0	0	8	15:01	05:14	04:14-17:25,05:11-12:20
+00033|	Frostaxe	ORC	15	Research	0	0	0	7	20:48	19:14	02:08-23:47,06:12-17:46
+00034|	Wyatt	ROG	24	Soldier Training,Construction,Research	0	0	0	2	07:56	10:20	18:07-11:26,20:52-08:41
+00035|	Casey	PAL	7	Soldier Training,Construction,Research	0	0	0	1	10:34	23:30	03:42-01:12,23:46-10:04
+00036|	Bloodheart	ELF	10	Research,Soldier Training	0	0	0	1	10:49	07:31	21:52-08:17,05:56-00:44
+00037|	Firebane	HUM	0	Construction,Soldier Training	0	0	0	16	02:05	07:50	09:43-17:08,18:06-08:13
+00038|	Riley	ROG	17	Construction,Soldier Training	0	0	0	20	23:15	00:29	07:55-01:42,17:52-05:09
+00039|	Shadowclaw	ROG	6	Construction,Soldier Training	0	0	0	11	19:17	16:06	06:14-12:57,23:40-08:15
+00040|	Quinn	ELF	14	Construction	0	0	0	20	14:14	19:25	05:39-20:55,02:15-00:21
+00041|	Wren	MAG	7	Research,Soldier Training	0	0	0	20	22:14	04:09	11:18-08:27,06:10-23:07
+00042|	Ironblade	MAG	12	Research	0	0	0	4	15:40	19:50	21:51-05:55,14:03-19:49
+00043|	Steelfury	ELF	2	Soldier Training,Construction	0	0	0	13	23:10	13:21	18:37-09:21,22:49-01:12
+00044|	Bloodrage	PAL	9	Soldier Training	0	0	0	9	08:01	07:06	07:30-14:24,13:27-02:45
+00045|	Nightclaw	HUM	19	Soldier Training,Construction,Research	0	0	0	12	18:43	22:51	04:54-12:37,20:23-14:18
+00046|	Piper	ORC	11	Soldier Training,Construction,Research	0	0	0	15	08:03	03:37	06:14-02:37,19:51-06:49
+00047|	Fireblade	WAR	3	Soldier Training,Construction	0	0	0	7	04:24	08:52	04:56-01:32,16:16-02:16
+00048|	Hayden	DWA	11	Construction	0	0	0	1	03:58	15:26	21:58-09:04,21:38-19:08
+00049|	Umber	ROG	17	Construction,Research	0	0	0	6	23:12	09:01	01:21-16:17,07:33-19:22
+00050|	Ironbane	ELF	0	Research,Construction	0	0	0	19	00:48	02:36	02:56-20:42,18:44-05:42
+00051|	Stormfury	ROG	15	Soldier Training,Construction,Research	0	0	0	4	22:09	16:45	22:40-18:42,03:22-20:50
+00052|	Dragonaxe	WAR	24	Research,Soldier Training	0	0	0	18	02:40	15:15	21:40-00:50,03:04-17:56
+00053|	Frostguard	MAG	11	Research	0	0	0	7	05:48	00:17	14:59-08:16,15:46-06:39
+00054|	Bloodfury	DWA	8	Soldier Training	0	0	0	15	11:09	13:53	11:25-01:14,22:33-15:06
+00055|	Reese	DWA	15	Construction	0	0	0	20	23:15	03:00	20:29-23:38,17:51-16:24
+00056|	Brooks	ORC	13	Soldier Training,Construction,Research	0	0	0	13	04:31	10:44	05:29-19:39,00:51-06:02
+00057|	Ellis	WAR	12	Research,Construction	0	0	0	19	18:04	23:51	16:46-12:13,07:23-02:01
+00058|	Parker	PAL	0	Research,Construction	0	0	0	6	02:48	18:15	01:58-16:15,18:09-05:24
+00059|	Vance	HUM	16	Construction	0	0	0	11	15:23	01:56	17:47-12:02,08:15-05:18
+00060|	Sam	WAR	0	Soldier Training	0	0	0	8	23:17	06:35	17:20-23:59,16:04-08:18
+00061|	Xander	DWA	9	Research,Soldier Training	0	0	0	18	12:11	20:02	18:10-23:18,06:50-18:17
+00062|	Violet	ORC	12	Soldier Training,Research	0	0	0	17	22:34	08:13	21:46-02:04,12:35-14:18
+00063|	Stormbane	DWA	18	Soldier Training,Construction,Research	0	0	0	11	10:36	22:00	05:13-08:17,10:22-04:56
+00064|	Indigo	ELF	14	Soldier Training,Construction,Research	0	0	0	9	20:38	16:50	04:33-06:08,16:54-00:24
+00065|	Stormaxe	PAL	11	Research,Construction	0	0	0	8	03:20	16:27	21:03-05:22,08:34-20:24
+00066|	Kendall	PAL	0	Soldier Training,Construction,Research	0	0	0	2	16:36	11:53	06:05-15:29,13:05-15:52
+00067|	Bloodstrike	MAG	23	Research,Soldier Training	0	0	0	10	23:29	16:58	06:41-17:55,13:49-00:32
+00068|	Greyson	WAR	36	Soldier Training	0	0	0	3	06:47	09:53	04:30-01:55,09:18-03:04
+00069|	Gabe	ELF	20	Soldier Training	0	0	0	5	15:29	07:22	16:13-03:27,07:39-21:59
+00070|	Nightlord	DWA	11	Construction	0	0	0	5	13:06	18:18	09:25-02:12,11:14-22:33
+00071|	Ironheart	HUM	0	Research,Soldier Training	0	0	0	12	07:29	20:49	03:54-04:21,14:49-09:00
+00072|	Thunderguard	ORC	0	Construction	0	0	0	16	17:00	13:01	03:48-08:57,12:47-08:25
+00073|	Logan	HUM	0	Soldier Training,Construction,Research	0	0	0	3	03:56	06:09	22:42-02:40,10:09-15:02
+00074|	Finley	DWA	7	Research	0	0	0	8	00:21	12:24	23:29-14:22,17:29-18:49
+00075|	Nightbane	ROG	3	Construction,Research	0	0	0	20	01:57	04:44	22:43-21:56,16:50-00:59
+00076|	Emerson	WAR	23	Soldier Training,Construction,Research	0	0	0	9	04:07	12:35	05:11-21:28,18:50-01:05
+00077|	Dragonbane	MAG	24	Research,Construction	0	0	0	11	09:26	09:28	04:46-02:14,14:00-14:09
+00078|	Jordan	ORC	13	Construction,Research	0	0	0	12	05:26	03:03	10:29-23:54,18:38-22:25
+00079|	Cameron	MAG	8	Soldier Training,Construction	0	0	0	20	20:07	22:30	19:37-05:43,04:59-02:21
+00080|	Dakota	WAR	2	Soldier Training	0	0	0	2	08:42	13:12	03:28-02:42,07:41-20:44
+00081|	Bloodbane	MAG	12	Research	0	0	0	13	00:04	11:59	18:15-12:19,19:48-16:51
+00082|	Nolan	WAR	2	Construction	0	0	0	17	04:41	05:04	13:43-06:24,20:26-17:39
+00083|	Drew	MAG	17	Research,Soldier Training	0	0	0	12	12:20	04:13	13:06-00:30,13:38-12:25
+00084|	Steelguard	WAR	7	Research,Construction	0	0	0	17	20:24	17:45	09:13-17:46,00:40-15:06
+00085|	Nightblade	ORC	26	Research	0	0	0	5	06:05	15:59	05:58-06:44,17:06-14:08
+00086|	Harper	ORC	0	Soldier Training,Construction,Research	0	0	0	13	14:21	19:17	08:28-10:02,00:27-08:52
+00087|	Dragonrage	PAL	14	Soldier Training,Construction,Research	0	0	0	20	13:37	14:14	04:26-02:12,09:10-10:10
+00088|	Lennox	ROG	0	Soldier Training,Construction	0	0	0	2	18:37	08:56	11:16-19:26,17:14-17:31
+00089|	Frostfury	DWA	15	Research,Soldier Training	0	0	0	2	16:00	15:22	18:59-18:17,00:12-19:39
+00090|	Thunderblade	ELF	8	Soldier Training,Construction,Research	0	0	0	5	12:51	09:51	19:13-06:48,10:24-13:15
+00091|	Ironlord	HUM	0	Research	0	0	0	4	08:12	09:21	17:15-13:21,11:59-11:55
+00092|	Zara	HUM	6	Construction	0	0	0	18	11:28	13:21	12:11-03:25,17:30-18:11
+00093|	Stormheart	PAL	3	Construction,Research	0	0	0	11	03:45	14:33	08:52-07:19,10:38-19:08
+00094|	Shadowstrike	ROG	17	Soldier Training,Construction	0	0	0	20	19:29	10:41	17:55-16:11,00:42-16:06
+00095|	Jane	ORC	19	Soldier Training,Construction,Research	0	0	0	4	06:18	06:45	19:56-19:50,05:49-12:56
+00096|	Fireclaw	HUM	4	Soldier Training	0	0	0	4	02:59	08:50	20:50-19:24,09:20-14:32
+00097|	Shadowblade	ORC	12	Soldier Training,Construction,Research	0	0	0	20	21:23	05:37	15:30-05:07,19:35-05:49
+00098|	Nightfury	PAL	15	Soldier Training,Construction,Research	0	0	0	6	00:48	09:45	18:56-00:03,16:37-03:12
+00099|	Madison	ROG	27	Research	0	0	0	19	23:53	12:34	22:47-11:50,18:05-03:48
+00100|	Oakley	PAL	10	Construction	0	0	0	11	08:14	07:26	12:49-07:07,12:26-02:57
+00101|	Yara	HUM	29	Research	0	0	0	19	12:46	09:24	04:23-20:29,22:00-07:10
+00102|	Steellord	DWA	33	Soldier Training,Construction	0	0	0	6	03:02	21:01	04:35-12:01,01:09-02:07
+00103|	Bloodblade	DWA	8	Soldier Training	0	0	0	12	14:12	14:10	06:24-17:38,05:43-12:40
+00104|	Ironguard	ELF	21	Construction,Soldier Training	0	0	0	4	21:24	09:03	21:13-10:13,17:12-04:07
+00105|	Skylar	MAG	8	Research,Construction	0	0	0	4	05:08	20:44	17:49-14:58,05:46-00:04
+00106|	Tanner	ELF	3	Soldier Training	0	0	0	3	07:35	05:41	16:36-09:40,01:43-06:51
+00107|	Nightheart	ROG	0	Construction,Soldier Training	0	0	0	17	17:52	01:37	04:15-12:09,15:50-18:13
+00108|	Micah	MAG	1	Research,Soldier Training	0	0	0	7	16:32	07:55	22:06-09:38,06:56-18:58
+00109|	Dragonclaw	WAR	13	Soldier Training,Construction,Research	0	0	0	1	18:34	22:17	16:24-22:38,01:47-05:44
+00110|	Morgan	PAL	17	Research	0	0	0	14	07:14	00:51	17:45-11:21,00:09-19:34
+00111|	Shadowaxe	ELF	14	Research,Soldier Training	0	0	0	19	23:42	20:21	21:52-17:15,08:47-08:52
+00112|	Ironfury	ORC	15	Construction,Research	0	0	0	14	10:29	01:24	12:27-23:16,10:41-12:44
+00113|	Alex	ORC	0	Soldier Training,Construction,Research	0	0	0	19	18:29	16:40	01:35-11:51,08:25-11:56
