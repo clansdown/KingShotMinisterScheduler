@@ -317,9 +317,10 @@ function processAndSchedule(players) {
     // Schedule advisor for day 4
     scheduleForDay(advisorList, 4, 'advisor', playerAssignments, assignments, waiting);
 
-    // Update UI
-    updateScheduleTables(assignments, waiting);
-    document.getElementById('loadingIndicator').style.display = 'none';
+     // Update UI
+     updateScheduleTables(assignments, waiting);
+     document.querySelectorAll('.day-section').forEach(el => el.style.display = 'block');
+     document.getElementById('loadingIndicator').style.display = 'none';
 }
 
 // Event listener for file input
