@@ -69,12 +69,13 @@ Follow these rules for consistency. The codebase uses vanilla JavaScript (ES5+) 
 
 ### Comments and Documentation
 - **No Inline Comments**: Avoid `// comment` unless explaining complex logic. Code should be clear.
-- **JSDoc Only**: Use for functions/variables. Example:
+- **Section Comments**: Use block comments (`/* */`) to indicate major code sections (e.g., `/* Data Processing Section */`). Keep concise and place above sections for clarity.
+- **JSDoc Only**: Use for all functions/variables with properly typed annotations. All complex types must be explicitly typed with properties (e.g., `{name: string, age: number}`), not generic `Object` or `Array<Object>`. Include `@param`, `@returns`, `@throws` if applicable. Example:
   ```
   /**
    * Parses CSV text into objects.
    * @param {string} csvText - Raw CSV data.
-   * @returns {Array<Object>} Parsed players.
+   * @returns {Array<{alliance: string, player: string}>} Parsed players with alliance and player fields.
    */
   ```
 - **README Updates**: Update `README.md` for new features; keep concise.
