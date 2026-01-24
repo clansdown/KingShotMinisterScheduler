@@ -52,6 +52,31 @@ const DEBUG = true;
  * @property {string} timeSlots - Comma-separated time ranges or 'No available ranges'.
  */
 
+/**
+ * @typedef {Object} SchedulerData
+ * @property {Array<PlayerObject>} rawPlayers - The initial parsed data from the CSV file, before any processing.
+ * @property {Array<PlayerObject>} processedPlayers - The player data after distributing general speedups.
+ * @property {Assignments} assignments - The generated schedule assignments.
+ * @property {Object<string, {ministerAssigned: boolean, advisorAssigned: boolean}>} playerAssignments - Tracking of assigned players.
+ * @property {Array<WaitingPlayer>} waitingList - List of players who could not be assigned.
+ * @property {Array<PlayerObject>} filteredOut - List of players filtered out due to insufficient hours.
+ * @property {number} minHours - The minimum hours threshold used for processing.
+ */
+
+/**
+ * Global object to hold all application data.
+ * @type {SchedulerData}
+ */
+const schedulerData = {
+    rawPlayers: [],
+    processedPlayers: [],
+    assignments: { 1: {ministers: [], advisors: []}, 2: {ministers: [], advisors: []}, 4: {ministers: [], advisors: []}, 5: {ministers: [], advisors: []} },
+    waitingList: [],
+    filteredOut: [],
+    playerAssignments: {},
+    minHours: 20
+};
+
 // Constants for CSV field names (normalized to lowercase)
 const PLAYER = 'player';
 const ALLIANCE = 'alliance';
@@ -587,34 +612,38 @@ function populateDebugTable(players) {
  * @param {number} minHours - Minimum hours required for construction+research or training.
  */
 function processAndSchedule(players, minHours) {
+    schedulerData.minHours = minHours;
+    schedulerData.rawPlayers = JSON.parse(JSON.stringify(players));
+    schedulerData.processedPlayers = players; // In-place modification will happen on this array
+
     // Allocate general speedups
-    players.forEach(allocateGeneralSpeedups);
+    schedulerData.processedPlayers.forEach(allocateGeneralSpeedups);
 
     // Filter players based on minimum hours
-    const filtered = players.filter(player => (player[CONSTRUCTION] + player[RESEARCH] >= minHours) || (player[SOLDIER_TRAINING] >= minHours));
-    const filteredOut = players.filter(player => !filtered.includes(player));
+    const filtered = schedulerData.processedPlayers.filter(player => (player[CONSTRUCTION] + player[RESEARCH] >= minHours) || (player[SOLDIER_TRAINING] >= minHours));
+    schedulerData.filteredOut = schedulerData.processedPlayers.filter(player => !filtered.includes(player));
 
     // Create lists from filtered players
     const ministerList = createMinisterList(filtered);
     const advisorList = createAdvisorList(filtered);
 
     // Debug: Show player time slots before Day 1 scheduling
-    populateDebugTable(players);
+    populateDebugTable(schedulerData.processedPlayers);
 
     // Initialize assignments and tracking
-    const assignments = { 1: {ministers: [], advisors: []}, 2: {ministers: [], advisors: []}, 4: {ministers: [], advisors: []}, 5: {ministers: [], advisors: []} };
-    const playerAssignments = {};
+    schedulerData.assignments = { 1: {ministers: [], advisors: []}, 2: {ministers: [], advisors: []}, 4: {ministers: [], advisors: []}, 5: {ministers: [], advisors: []} };
+    schedulerData.playerAssignments = {};
     filtered.forEach(player => {
         const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
-        playerAssignments[playerId] = { ministerAssigned: false, advisorAssigned: false };
+        schedulerData.playerAssignments[playerId] = { ministerAssigned: false, advisorAssigned: false };
     });
-    const waiting = [];
+    schedulerData.waitingList = [];
 
     // Schedule minister for days 1,2,5, trying days sequentially per player
     const ministerDays = [1, 2, 5];
     for (const player of ministerList) {
         const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
-        if (playerAssignments[playerId].ministerAssigned) {
+        if (schedulerData.playerAssignments[playerId].ministerAssigned) {
             continue;
         }
         if (player[CONSTRUCTION] + player[RESEARCH] < minHours) {
@@ -622,11 +651,11 @@ function processAndSchedule(players, minHours) {
         }
         let assigned = false;
         for (const day of ministerDays) {
-            const taken = new Set(assignments[day].ministers.map(a => a.start));
+            const taken = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
             const slots = generateTimeSlots();
             for (const slot of slots) {
                 if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
-                    assignments[day].ministers.push({
+                    schedulerData.assignments[day].ministers.push({
                         start: slot.start,
                         end: slot.end,
                         alliance: player[ALLIANCE],
@@ -634,7 +663,7 @@ function processAndSchedule(players, minHours) {
                         speedups: `${Math.round(player[CONSTRUCTION])} / ${Math.round(player[RESEARCH])}`,
                         truegold: player[TRUEGOLD_PIECES]
                     });
-                    playerAssignments[playerId].ministerAssigned = true;
+                    schedulerData.playerAssignments[playerId].ministerAssigned = true;
                     assigned = true;
                     break;
                 }
@@ -644,7 +673,7 @@ function processAndSchedule(players, minHours) {
             }
         }
         if (!assigned) {
-            waiting.push({
+            schedulerData.waitingList.push({
                 alliance: player[ALLIANCE],
                 player: player[PLAYER],
                 speedups: {
@@ -659,11 +688,11 @@ function processAndSchedule(players, minHours) {
     }
 
     // Schedule advisor for day 4
-    scheduleNobleAdvisors(advisorList, minHours, playerAssignments, assignments, waiting, 4);
+    scheduleNobleAdvisors(advisorList, minHours, schedulerData.playerAssignments, schedulerData.assignments, schedulerData.waitingList, 4);
 
      // Update UI
-     updateScheduleTables(assignments, waiting);
-     updateFilteredList(filteredOut);
+     updateScheduleTables(schedulerData.assignments, schedulerData.waitingList);
+     updateFilteredList(schedulerData.filteredOut);
       document.querySelectorAll('.day-section').forEach(el => el.style.display = 'block');
       document.getElementById('day1HeadingWrapper').scrollIntoView({ behavior: 'smooth', block: 'start' });
       document.getElementById('loadingIndicator').style.display = 'none';
