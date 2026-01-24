@@ -61,6 +61,8 @@ const DEBUG = true;
  * @property {Array<WaitingPlayer>} waitingList - List of players who could not be assigned.
  * @property {Array<PlayerObject>} filteredOut - List of players filtered out due to insufficient hours.
  * @property {number} minHours - The minimum hours threshold used for processing.
+ * @property {number} creationTimeMS - Creation timestamp in epoch milliseconds.
+ * @property {number} lastModifiedTimeMS - Last modification timestamp in epoch milliseconds.
  */
 
 /**
@@ -74,7 +76,9 @@ const schedulerData = {
     waitingList: [],
     filteredOut: [],
     playerAssignments: {},
-    minHours: 20
+    minHours: 20,
+    creationTimeMS: 0,
+    lastModifiedTimeMS: 0
 };
 
 // Constants for CSV field names (normalized to lowercase)
@@ -612,6 +616,9 @@ function populateDebugTable(players) {
  * @param {number} minHours - Minimum hours required for construction+research or training.
  */
 function calculateScheduleData(players, minHours) {
+    const now = Date.now();
+    schedulerData.creationTimeMS = now;
+    schedulerData.lastModifiedTimeMS = now;
     schedulerData.minHours = minHours;
     schedulerData.rawPlayers = JSON.parse(JSON.stringify(players));
     schedulerData.processedPlayers = players; // In-place modification will happen on this array
@@ -706,8 +713,13 @@ function renderUI(data) {
  * @param {Array<PlayerObject>} players - Array of player objects from CSV.
  * @param {number} minHours - Minimum hours required for construction+research or training.
  */
-function processAndSchedule(players, minHours) {
+async function processAndSchedule(players, minHours) {
     calculateScheduleData(players, minHours);
+    try {
+        await saveSchedulerData(schedulerData);
+    } catch (e) {
+        console.error("Failed to save scheduler data to storage", e);
+    }
     renderUI(schedulerData);
 }
 
