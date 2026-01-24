@@ -479,16 +479,19 @@ function scheduleNobleAdvisors(playerList, minHours, playerAssignments, assignme
  * @param {Array<WaitingPlayer>} waiting - Array of waiting player objects.
  */
 function updateScheduleTables(assignments, waiting) {
-    [1, 2, 4, 5].forEach(day => {
+    const days = [1, 2, 3, 4, 5];
+    days.forEach(day => {
         assignments[day].ministers.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
-        assignments[day].advisors.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
         populateTable(`day${day}MinisterTable`, assignments[day].ministers);
-        populateTable(`day${day}NobleTable`, assignments[day].advisors);
-        // Hide second table section if empty
-        const secondSectionId = day === 4 ? `day${day}MinisterSection` : `day${day}NobleSection`;
-        const secondAppointments = day === 4 ? assignments[day].ministers : assignments[day].advisors;
-        if (secondAppointments.length === 0) {
-            document.getElementById(secondSectionId).style.display = 'none';
+        if (day !== 3) {
+            assignments[day].advisors.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+            populateTable(`day${day}NobleTable`, assignments[day].advisors);
+            // Hide second table section if empty
+            const secondSectionId = day === 4 ? `day${day}MinisterSection` : `day${day}NobleSection`;
+            const secondAppointments = day === 4 ? assignments[day].ministers : assignments[day].advisors;
+            if (secondAppointments.length === 0) {
+                document.getElementById(secondSectionId).style.display = 'none';
+            }
         }
     });
     populateWaitingList(waiting);
@@ -505,7 +508,7 @@ function populateTable(tableId, appointments) {
     if (appointments.length === 0) {
         const row = tbody.insertRow();
         const cell = row.insertCell(0);
-        cell.textContent = 'No Assignments';
+        cell.textContent = 'No appointments.';
         cell.colSpan = tableId.includes('Noble') ? 4 : 5; // Updated colspan for extra action column
     } else {
         const dayMatch = tableId.match(/day(\d+)/);
@@ -545,7 +548,7 @@ function populateTable(tableId, appointments) {
             actionsCell.appendChild(removeBtn);
         });
     }
-    
+
     // Update header to add "Actions" column if not already there
     const thead = document.querySelector(`#${tableId} thead tr`);
     if (thead && !thead.lastElementChild.textContent.includes('Actions')) {
@@ -957,17 +960,17 @@ async function loadRecentData() {
         if (recentData) {
             const fiveDaysInMs = 5 * 24 * 60 * 60 * 1000;
             const age = Date.now() - recentData.creationTimeMS;
-            
             if (age < fiveDaysInMs) {
                 console.log('Found recent data, loading...');
                 loadSchedulerSystem(recentData);
             } else {
                 console.log('Recent data found but it is older than 5 days. Ignoring.');
             }
+        } else {
+            console.log('No recent data found.');
         }
-    } catch (error) {
-        // Silently fail as requested
-        console.warn('Failed to load recent data:', error);
+    } catch (loadError) {
+        console.warn('Error loading scheduler system:', loadError);
     }
 }
 
