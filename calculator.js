@@ -607,11 +607,11 @@ function populateDebugTable(players) {
 }
 
 /**
- * Processes players, allocates speedups, filters, creates lists, and schedules appointments.
+ * Calculates the schedule and updates the global schedulerData object.
  * @param {Array<PlayerObject>} players - Array of player objects from CSV.
  * @param {number} minHours - Minimum hours required for construction+research or training.
  */
-function processAndSchedule(players, minHours) {
+function calculateScheduleData(players, minHours) {
     schedulerData.minHours = minHours;
     schedulerData.rawPlayers = JSON.parse(JSON.stringify(players));
     schedulerData.processedPlayers = players; // In-place modification will happen on this array
@@ -626,9 +626,6 @@ function processAndSchedule(players, minHours) {
     // Create lists from filtered players
     const ministerList = createMinisterList(filtered);
     const advisorList = createAdvisorList(filtered);
-
-    // Debug: Show player time slots before Day 1 scheduling
-    populateDebugTable(schedulerData.processedPlayers);
 
     // Initialize assignments and tracking
     schedulerData.assignments = { 1: {ministers: [], advisors: []}, 2: {ministers: [], advisors: []}, 4: {ministers: [], advisors: []}, 5: {ministers: [], advisors: []} };
@@ -689,13 +686,29 @@ function processAndSchedule(players, minHours) {
 
     // Schedule advisor for day 4
     scheduleNobleAdvisors(advisorList, minHours, schedulerData.playerAssignments, schedulerData.assignments, schedulerData.waitingList, 4);
+}
 
-     // Update UI
-     updateScheduleTables(schedulerData.assignments, schedulerData.waitingList);
-     updateFilteredList(schedulerData.filteredOut);
-      document.querySelectorAll('.day-section').forEach(el => el.style.display = 'block');
-      document.getElementById('day1HeadingWrapper').scrollIntoView({ behavior: 'smooth', block: 'start' });
-      document.getElementById('loadingIndicator').style.display = 'none';
+/**
+ * Renders the UI based on the provided scheduler data.
+ * @param {SchedulerData} data - The data to render.
+ */
+function renderUI(data) {
+    populateDebugTable(data.processedPlayers);
+    updateScheduleTables(data.assignments, data.waitingList);
+    updateFilteredList(data.filteredOut);
+    document.querySelectorAll('.day-section').forEach(el => el.style.display = 'block');
+    document.getElementById('day1HeadingWrapper').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById('loadingIndicator').style.display = 'none';
+}
+
+/**
+ * Processes players, allocates speedups, filters, creates lists, and schedules appointments.
+ * @param {Array<PlayerObject>} players - Array of player objects from CSV.
+ * @param {number} minHours - Minimum hours required for construction+research or training.
+ */
+function processAndSchedule(players, minHours) {
+    calculateScheduleData(players, minHours);
+    renderUI(schedulerData);
 }
 
 // Event listener for file input
