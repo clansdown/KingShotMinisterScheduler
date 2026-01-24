@@ -1,6 +1,57 @@
 // Debug flag - set to false to disable debug output
 const DEBUG = true;
 
+/**
+ * @typedef {Object} PlayerObject
+ * @property {string} player - Player's name.
+ * @property {string} alliance - Player's alliance name.
+ * @property {number} [generalSpeedups] - Number of general speedups (converted to number).
+ * @property {string} [generalUsedFor] - Comma-separated categories for general speedups.
+ * @property {number} soldierTraining - Base soldier training speedups (converted to number).
+ * @property {number} construction - Base construction speedups (converted to number).
+ * @property {number} research - Base research speedups (converted to number).
+ * @property {number} truegoldPieces - Number of TrueGold pieces (converted to number).
+ * @property {string} timeSlotStartUtc - Overall start time in HH:MM.
+ * @property {string} timeSlotEndUtc - Overall end time in HH:MM.
+ * @property {string} [allTimes] - Available time ranges string.
+ * @property {Array<TimeRange>} availableTimeRanges - Parsed available time ranges.
+ */
+
+/**
+ * @typedef {Object} TimeRange
+ * @property {string} start - Start time in HH:MM format.
+ * @property {string} end - End time in HH:MM format.
+ */
+
+/**
+ * @typedef {Object} Appointment
+ * @property {string} start - Slot start time in HH:MM.
+ * @property {string} end - Slot end time in HH:MM.
+ * @property {string} alliance - Player's alliance.
+ * @property {string} player - Player's name.
+ * @property {string|number} speedups - Speedup info (string for ministers, number for advisors).
+ * @property {number} truegold - TrueGold pieces.
+ */
+
+/**
+ * @typedef {Object} PlayerAssignments
+ * @property {Object<string, {ministerAssigned: boolean, advisorAssigned: boolean}>} - Keys are player IDs (alliance/player), values are assignment status.
+ */
+
+/**
+ * @typedef {Object} Assignments
+ * @property {Object<number, {ministers: Array<Appointment>, advisors: Array<Appointment>}>} - Keys are day numbers (1,2,4,5), values are role-specific appointment arrays.
+ */
+
+/**
+ * @typedef {Object} WaitingPlayer
+ * @property {string} alliance - Player's alliance.
+ * @property {string} player - Player's name.
+ * @property {{soldier: number, construction: number, research: number}} speedups - Post-distribution speedups.
+ * @property {number} truegold - TrueGold pieces.
+ * @property {string} timeSlots - Comma-separated time ranges or 'No available ranges'.
+ */
+
 // Constants for CSV field names (normalized to lowercase)
 const PLAYER = 'player';
 const ALLIANCE = 'alliance';
@@ -22,7 +73,7 @@ const CATEGORY_RESEARCH = 'research';
 /**
  * Parses a CSV text into an array of objects, handling quoted fields and auto-detecting delimiter (comma or tab).
  * @param {string} csvText - The raw CSV text from the file.
- * @returns {Array<Object>} Array of player objects with keys matching column headers.
+ * @returns {Array<PlayerObject>} Array of player objects with fields matching CSV headers, including parsed time ranges.
  */
 function parseCsvToObjects(csvText) {
     const lines = csvText.split('\n').filter(line => line.trim() !== '');
@@ -98,7 +149,7 @@ function parseCsvToObjects(csvText) {
  * and splits overnight ranges (start >= end) into two: start to 23:59 and 00:00 to end,
  * unless the end is exactly 00:00, in which case it's treated as a single range to 23:59.
  * @param {string} allTimes - Comma-separated time ranges, e.g., "00:00-12:00,19-2".
- * @returns {Array<Object>} Array of {start: string, end: string} in HH:MM format.
+ * @returns {Array<TimeRange>} Array of time range objects.
  */
 function parseTimeRanges(allTimes) {
     console.log('Parsing time ranges from:', allTimes);
@@ -132,8 +183,8 @@ function parseTimeRanges(allTimes) {
 /**
  * Unions an array of time range objects by removing exact duplicates and sorting.
  * Does not merge overlapping or adjacent ranges.
- * @param {Array<Object>} ranges - Array of {start: string, end: string} in HH:MM format.
- * @returns {Array<Object>} Deduplicated and sorted array of {start: string, end: string}.
+ * @param {Array<TimeRange>} ranges - Array of time range objects.
+ * @returns {Array<TimeRange>} Deduplicated and sorted array of time range objects.
  */
 function unionTimeRanges(ranges) {
     const seen = new Set();
@@ -167,7 +218,7 @@ function normalizeTime(timeStr) {
  * Allocates general speedups to the specified categories based on the 'General Used For' field.
  * If 2 categories: 60/40 split (first category gets 60%).
  * If 3 or none: even split.
- * @param {Object} player - The player object to modify.
+ * @param {PlayerObject} player - The player object to modify in-place.
  */
 function allocateGeneralSpeedups(player) {
     let usedFor = player[GENERAL_USED_FOR].split(',').map(s => s.trim().toLowerCase());
@@ -204,9 +255,9 @@ function allocateGeneralSpeedups(player) {
 }
 
 /**
- * Creates the minister list: players sorted by the maximum of construction or research speedups (descending).
- * @param {Array<Object>} players - Array of player objects.
- * @returns {Array<Object>} Sorted minister list.
+ * Creates the minister list: players sorted by the sum of construction and research speedups (descending).
+ * @param {Array<PlayerObject>} players - Array of player objects.
+ * @returns {Array<PlayerObject>} Sorted minister list.
  */
 function createMinisterList(players) {
     return players.slice().sort((a, b) => {
@@ -216,8 +267,8 @@ function createMinisterList(players) {
 
 /**
  * Creates the advisor list: players sorted by soldier training speedups (descending).
- * @param {Array<Object>} players - Array of player objects.
- * @returns {Array<Object>} Sorted advisor list.
+ * @param {Array<PlayerObject>} players - Array of player objects.
+ * @returns {Array<PlayerObject>} Sorted advisor list.
  */
 function createAdvisorList(players) {
     return players.slice().sort((a, b) => b[SOLDIER_TRAINING] - a[SOLDIER_TRAINING]);
@@ -225,7 +276,7 @@ function createAdvisorList(players) {
 
 /**
  * Generates an array of half-hour time slots for a day (00:00 to 23:30 UTC).
- * @returns {Array<Object>} Array of {start: string, end: string} in HH:MM format.
+ * @returns {Array<TimeRange>} Array of time range objects.
  */
 function generateTimeSlots() {
     const slots = [];
@@ -255,9 +306,9 @@ function timeToMinutes(time) {
 /**
  * Checks if a time slot is available for a player based on their time ranges and overall window.
  * Handles crossing slots (e.g., 23:30-00:00) by checking late-night and early-morning availability.
- * @param {Object} player - The player object.
- * @param {string} slotStart - Slot start time HH:MM.
- * @param {string} slotEnd - Slot end time HH:MM.
+ * @param {PlayerObject} player - The player object.
+ * @param {string} slotStart - Slot start time in HH:MM.
+ * @param {string} slotEnd - Slot end time in HH:MM.
  * @returns {boolean} True if the slot is available.
  */
 function isSlotAvailable(player, slotStart, slotEnd) {
@@ -304,13 +355,13 @@ function isSlotAvailable(player, slotStart, slotEnd) {
 
 /**
  * Schedules appointments for a specific day and role, assigning players to earliest available slots.
- * @param {Array<Object>} playerList - Sorted list of players for the role.
+ * @param {Array<PlayerObject>} playerList - Sorted list of players for the role.
  * @param {number} day - The day number (1,2,4,5).
  * @param {string} role - 'minister' or 'advisor'.
  * @param {number} minHours - Minimum hours required for the role.
- * @param {Object} playerAssignments - Map of player IDs to assignment status.
- * @param {Object} assignments - Object to store assigned slots per day.
- * @param {Array} waiting - Array to collect waiting players.
+ * @param {PlayerAssignments} playerAssignments - Map of player IDs to assignment status.
+ * @param {Assignments} assignments - Object to store assigned slots per day.
+ * @param {Array<WaitingPlayer>} waiting - Array to collect waiting players.
  */
 function scheduleForDay(playerList, day, role, minHours, playerAssignments, assignments, waiting) {
     const slots = generateTimeSlots();
@@ -336,18 +387,38 @@ function scheduleForDay(playerList, day, role, minHours, playerAssignments, assi
                 } else {
                     speedups = `${Math.round(player[CONSTRUCTION])} / ${Math.round(player[RESEARCH])}`;
                 }
-                 assignments[day].push({
-                     start: slot.start,
-                     end: slot.end,
-                     alliance: player[ALLIANCE],
-                     player: player[PLAYER],
-                     speedups: speedups,
-                     truegold: player[TRUEGOLD_PIECES]
-                 });
+                  const roleKey = role === 'minister' ? 'ministers' : 'advisors';
+                  assignments[day][roleKey].push({
+                      start: slot.start,
+                      end: slot.end,
+                      alliance: player[ALLIANCE],
+                      player: player[PLAYER],
+                      speedups: speedups,
+                      truegold: player[TRUEGOLD_PIECES]
+                  });
                 taken.add(slot.start);
                 playerAssignments[playerId][role + 'Assigned'] = true;
                 assigned = true;
                 break;
+            }
+        }
+        if (!assigned) {
+            // Try overflow as minister on Day 4
+            for (const slot of slots) {
+                if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
+                    assignments[day].ministers.push({
+                        start: slot.start,
+                        end: slot.end,
+                        alliance: player[ALLIANCE],
+                        player: player[PLAYER],
+                        speedups: `${Math.round(player[CONSTRUCTION])} / ${Math.round(player[RESEARCH])}`,
+                        truegold: player[TRUEGOLD_PIECES]
+                    });
+                    taken.add(slot.start);
+                    playerAssignments[playerId].advisorAssigned = true;
+                    assigned = true;
+                    break;
+                }
             }
         }
         if (!assigned) {
@@ -368,13 +439,21 @@ function scheduleForDay(playerList, day, role, minHours, playerAssignments, assi
 
 /**
  * Updates the schedule tables and waiting list in the UI.
- * @param {Object} assignments - Object with day keys and arrays of appointment objects.
- * @param {Array} waiting - Array of waiting player objects.
+ * @param {Assignments} assignments - Object with day keys and role-specific appointment arrays.
+ * @param {Array<WaitingPlayer>} waiting - Array of waiting player objects.
  */
 function updateScheduleTables(assignments, waiting) {
     [1, 2, 4, 5].forEach(day => {
-        assignments[day].sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
-        populateTable(`day${day}Table`, assignments[day]);
+        assignments[day].ministers.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+        assignments[day].advisors.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+        populateTable(`day${day}MinisterTable`, assignments[day].ministers);
+        populateTable(`day${day}NobleTable`, assignments[day].advisors);
+        // Hide second table if empty
+        const secondTableId = day === 4 ? `day${day}MinisterTable` : `day${day}NobleTable`;
+        const secondAppointments = day === 4 ? assignments[day].ministers : assignments[day].advisors;
+        if (secondAppointments.length === 0) {
+            document.getElementById(secondTableId).style.display = 'none';
+        }
     });
     populateWaitingList(waiting);
 }
@@ -382,7 +461,7 @@ function updateScheduleTables(assignments, waiting) {
 /**
  * Populates a table with appointment data.
  * @param {string} tableId - The ID of the table element.
- * @param {Array<Object>} appointments - Array of appointment objects {start, end, alliance, player}.
+ * @param {Array<Appointment>} appointments - Array of appointment objects.
  */
 function populateTable(tableId, appointments) {
     const tbody = document.querySelector(`#${tableId} tbody`);
@@ -391,14 +470,14 @@ function populateTable(tableId, appointments) {
         const row = tbody.insertRow();
         const cell = row.insertCell(0);
         cell.textContent = 'No Assignments';
-        cell.colSpan = tableId === 'day4Table' ? 3 : 4;
+        cell.colSpan = tableId.includes('Noble') ? 3 : 4;
     } else {
         appointments.forEach(app => {
             const row = tbody.insertRow();
             row.insertCell(0).textContent = `${app.start}–${app.end}`;
             row.insertCell(1).textContent = `${app.alliance}/${app.player}`;
             row.insertCell(2).textContent = app.speedups;
-            if (tableId !== 'day4Table') {
+            if (!tableId.includes('Noble')) {
                 row.insertCell(3).textContent = app.truegold;
             }
         });
@@ -407,7 +486,7 @@ function populateTable(tableId, appointments) {
 
 /**
  * Populates the waiting list.
- * @param {Array<Object>} waiting - Array of waiting player objects with speedups, truegold, timeSlots.
+ * @param {Array<WaitingPlayer>} waiting - Array of waiting player objects.
  */
 function populateWaitingList(waiting) {
     const ol = document.getElementById('waitingList');
@@ -425,7 +504,7 @@ function populateWaitingList(waiting) {
 
 /**
  * Populates the filtered users list.
- * @param {Array<Object>} filteredOut - Array of filtered-out player objects.
+ * @param {Array<PlayerObject>} filteredOut - Array of filtered-out player objects.
  */
 function updateFilteredList(filteredOut) {
     const section = document.getElementById('filteredUsersSection');
@@ -446,7 +525,7 @@ function updateFilteredList(filteredOut) {
 /**
  * Populates the debug table with player time slots if DEBUG is true.
  * Targets the existing #playerInfoSection div in HTML.
- * @param {Array<Object>} players - Array of player objects.
+ * @param {Array<PlayerObject>} players - Array of player objects.
  */
 function populateDebugTable(players) {
     if (!DEBUG) return;
@@ -501,7 +580,7 @@ function populateDebugTable(players) {
 
 /**
  * Processes players, allocates speedups, filters, creates lists, and schedules appointments.
- * @param {Array<Object>} players - Array of player objects from CSV.
+ * @param {Array<PlayerObject>} players - Array of player objects from CSV.
  * @param {number} minHours - Minimum hours required for construction+research or training.
  */
 function processAndSchedule(players, minHours) {
@@ -520,7 +599,7 @@ function processAndSchedule(players, minHours) {
     populateDebugTable(players);
 
     // Initialize assignments and tracking
-    const assignments = { 1: [], 2: [], 4: [], 5: [] };
+    const assignments = { 1: {ministers: [], advisors: []}, 2: {ministers: [], advisors: []}, 4: {ministers: [], advisors: []}, 5: {ministers: [], advisors: []} };
     const playerAssignments = {};
     filtered.forEach(player => {
         const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
@@ -544,7 +623,7 @@ function processAndSchedule(players, minHours) {
             const slots = generateTimeSlots();
             for (const slot of slots) {
                 if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
-                    assignments[day].push({
+                    assignments[day].ministers.push({
                         start: slot.start,
                         end: slot.end,
                         alliance: player[ALLIANCE],
