@@ -152,7 +152,6 @@ function parseCsvToObjects(csvText) {
  * @returns {Array<TimeRange>} Array of time range objects.
  */
 function parseTimeRanges(allTimes) {
-    console.log('Parsing time ranges from:', allTimes);
     if (!allTimes) {
         return [];
     }
@@ -166,7 +165,6 @@ function parseTimeRanges(allTimes) {
         const end = normalizeTime(parts[1]);
         const startMin = timeToMinutes(start);
         const endMin = timeToMinutes(end);
-        console.log(`Parsed range: ${range} -> ${parts} -> start: ${start} (${startMin}), end: ${end} (${endMin})`);
         if (startMin < endMin) {
             ranges.push({ start, end });
         } else {
@@ -176,7 +174,6 @@ function parseTimeRanges(allTimes) {
             }
         }
     });
-    console.log('Parsed time ranges:', allTimes,ranges);
     return ranges;
 }
 
@@ -353,59 +350,63 @@ function isSlotAvailable(player, slotStart, slotEnd) {
     }
 }
 
+
 /**
- * Schedules appointments for a specific day and role, assigning players to earliest available slots.
- * @param {Array<PlayerObject>} playerList - Sorted list of players for the role.
- * @param {number} day - The day number (1,2,4,5).
- * @param {string} role - 'minister' or 'advisor'.
- * @param {number} minHours - Minimum hours required for the role.
- * @param {PlayerAssignments} playerAssignments - Map of player IDs to assignment status.
- * @param {Assignments} assignments - Object to store assigned slots per day.
- * @param {Array<WaitingPlayer>} waiting - Array to collect waiting players.
+ * Schedules Noble Advisors for Day 4, with overflow to Chief Ministers if no advisor slot is available.
+ * Players are processed in order of highest to lowest soldier training hours.
+ * @param {Array<PlayerObject>} playerList - List of players qualified for Noble Advisor (sorted by soldier training descending).
+ * @param {number} minHours - Minimum soldier training hours required for Noble Advisor qualification.
+ * @param {PlayerAssignments} playerAssignments - Object tracking each player's assignment status.
+ * @param {Assignments} assignments - Object containing assignment arrays for each day and role.
+ * @param {Array<WaitingPlayer>} waiting - Array to add players who cannot be assigned to either role.
+ * @param {number} day - The day number (expected to be 4).
  */
-function scheduleForDay(playerList, day, role, minHours, playerAssignments, assignments, waiting) {
-    const slots = generateTimeSlots();
-    const taken = new Set(); // Set of start times taken
+function scheduleNobleAdvisors(playerList, minHours, playerAssignments, assignments, waiting, day) {
+    // Sort players by training hours descending (highest first)
+    playerList.sort((a, b) => b.soldierTraining - a.soldierTraining);
+
+    // Generate independent slot arrays for advisors and ministers
+    const advisorSlots = generateTimeSlots();
+    const ministerSlots = generateTimeSlots();
+
+    // Independent taken sets for advisor and minister slots
+    const takenAdvisorSlots = new Set();
+    const takenMinisterSlots = new Set();
+
+    // Iterate through the sorted players
     for (const player of playerList) {
         const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
-        if (playerAssignments[playerId][role + 'Assigned']) {
-            continue; // Already assigned this role
+        if (playerAssignments[playerId].advisorAssigned) {
+            continue; // Already assigned as advisor (including via overflow)
         }
-        // Check role-specific qualification
-        if (role === 'minister' && (player[CONSTRUCTION] + player[RESEARCH] < minHours)) {
-            continue;
-        }
-        if (role === 'advisor' && (player[SOLDIER_TRAINING] < minHours)) {
+        // Check advisor qualification
+        if (player[SOLDIER_TRAINING] < minHours) {
             continue;
         }
         let assigned = false;
-        for (const slot of slots) {
-            if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
-                let speedups;
-                if (role === 'advisor') {
-                    speedups = Math.round(player[SOLDIER_TRAINING]);
-                } else {
-                    speedups = `${Math.round(player[CONSTRUCTION])} / ${Math.round(player[RESEARCH])}`;
-                }
-                  const roleKey = role === 'minister' ? 'ministers' : 'advisors';
-                  assignments[day][roleKey].push({
-                      start: slot.start,
-                      end: slot.end,
-                      alliance: player[ALLIANCE],
-                      player: player[PLAYER],
-                      speedups: speedups,
-                      truegold: player[TRUEGOLD_PIECES]
-                  });
-                taken.add(slot.start);
-                playerAssignments[playerId][role + 'Assigned'] = true;
+
+        // Attempt Noble Advisor assignment
+        for (const slot of advisorSlots) {
+            if (!takenAdvisorSlots.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
+                assignments[day].advisors.push({
+                    start: slot.start,
+                    end: slot.end,
+                    alliance: player[ALLIANCE],
+                    player: player[PLAYER],
+                    speedups: Math.round(player[SOLDIER_TRAINING]),
+                    truegold: player[TRUEGOLD_PIECES]
+                });
+                takenAdvisorSlots.add(slot.start);
+                playerAssignments[playerId].advisorAssigned = true;
                 assigned = true;
                 break;
             }
         }
+
+        // Attempt Chief Minister overflow
         if (!assigned) {
-            // Try overflow as minister on Day 4
-            for (const slot of slots) {
-                if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
+            for (const slot of ministerSlots) {
+                if (!takenMinisterSlots.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
                     assignments[day].ministers.push({
                         start: slot.start,
                         end: slot.end,
@@ -414,13 +415,15 @@ function scheduleForDay(playerList, day, role, minHours, playerAssignments, assi
                         speedups: `${Math.round(player[CONSTRUCTION])} / ${Math.round(player[RESEARCH])}`,
                         truegold: player[TRUEGOLD_PIECES]
                     });
-                    taken.add(slot.start);
-                    playerAssignments[playerId].advisorAssigned = true;
+                    takenMinisterSlots.add(slot.start);
+                    playerAssignments[playerId].advisorAssigned = true; // Counts as advisor assignment
                     assigned = true;
                     break;
                 }
             }
         }
+
+        // Handle unassigned players
         if (!assigned) {
             waiting.push({
                 alliance: player[ALLIANCE],
@@ -448,11 +451,11 @@ function updateScheduleTables(assignments, waiting) {
         assignments[day].advisors.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
         populateTable(`day${day}MinisterTable`, assignments[day].ministers);
         populateTable(`day${day}NobleTable`, assignments[day].advisors);
-        // Hide second table if empty
-        const secondTableId = day === 4 ? `day${day}MinisterTable` : `day${day}NobleTable`;
+        // Hide second table section if empty
+        const secondSectionId = day === 4 ? `day${day}MinisterSection` : `day${day}NobleSection`;
         const secondAppointments = day === 4 ? assignments[day].ministers : assignments[day].advisors;
         if (secondAppointments.length === 0) {
-            document.getElementById(secondTableId).style.display = 'none';
+            document.getElementById(secondSectionId).style.display = 'none';
         }
     });
     populateWaitingList(waiting);
@@ -619,7 +622,7 @@ function processAndSchedule(players, minHours) {
         }
         let assigned = false;
         for (const day of ministerDays) {
-            const taken = new Set(assignments[day].map(a => a.start));
+            const taken = new Set(assignments[day].ministers.map(a => a.start));
             const slots = generateTimeSlots();
             for (const slot of slots) {
                 if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
@@ -656,7 +659,7 @@ function processAndSchedule(players, minHours) {
     }
 
     // Schedule advisor for day 4
-    scheduleForDay(advisorList, 4, 'advisor', minHours, playerAssignments, assignments, waiting);
+    scheduleNobleAdvisors(advisorList, minHours, playerAssignments, assignments, waiting, 4);
 
      // Update UI
      updateScheduleTables(assignments, waiting);

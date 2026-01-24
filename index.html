@@ -78,9 +78,16 @@
 
       <div class="day-section" id="day1Section" style="display: none;">
            <div id="day1HeadingWrapper" style="padding-top: 20px;">
-               <h2>Day 1 Appointments (Chief Minister)</h2>
+               <div class="row mb-2">
+                   <div class="col">
+                       <h2>Day 1 Appointments (Chief Minister)</h2>
+                   </div>
+                   <div class="col text-end">
+                       <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay1Minister" onclick="toggleTable('day1MinisterTable')">Collapse</button>
+                   </div>
+               </div>
            </div>
-           <table id="day1MinisterTable" class="table table-striped">
+           <table id="day1MinisterTable" class="table table-striped w-100">
                <thead>
                    <tr>
                        <th>Appointment Time</th>
@@ -91,21 +98,38 @@
                </thead>
                <tbody></tbody>
            </table>
-           <table id="day1NobleTable" class="table table-striped">
-               <thead>
-                   <tr>
-                       <th>Appointment Time</th>
-                       <th>Alliance/Player</th>
-                       <th>Training Speedups</th>
-                   </tr>
-               </thead>
-               <tbody></tbody>
-           </table>
+          <div id="day1NobleSection">
+              <div class="row mb-2">
+                  <div class="col">
+                      <h3>Day 1 (Noble Advisor)</h3>
+                  </div>
+                  <div class="col text-end">
+                      <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay1Noble" onclick="toggleTable('day1NobleTable')">Collapse</button>
+                  </div>
+              </div>
+              <table id="day1NobleTable" class="table table-striped w-100">
+                  <thead>
+                      <tr>
+                          <th>Appointment Time</th>
+                          <th>Alliance/Player</th>
+                          <th>Training Speedups</th>
+                      </tr>
+                  </thead>
+                <tbody></tbody>
+            </table>
+          </div>
      </div>
 
       <div class="day-section" style="display: none;">
-           <h2>Day 2 Appointments (Chief Minister)</h2>
-            <table id="day2MinisterTable" class="table table-striped">
+           <div class="row mb-2">
+               <div class="col">
+                   <h2>Day 2 Appointments (Chief Minister)</h2>
+               </div>
+               <div class="col text-end">
+                   <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay2Minister" onclick="toggleTable('day2MinisterTable')">Collapse</button>
+               </div>
+           </div>
+            <table id="day2MinisterTable" class="table table-striped w-100">
                 <thead>
                     <tr>
                         <th>Appointment Time</th>
@@ -116,21 +140,38 @@
                 </thead>
               <tbody></tbody>
           </table>
-          <table id="day2NobleTable" class="table table-striped">
-              <thead>
-                  <tr>
-                      <th>Appointment Time</th>
-                      <th>Alliance/Player</th>
-                      <th>Training Speedups</th>
-                  </tr>
-              </thead>
-            <tbody></tbody>
-        </table>
+          <div id="day2NobleSection">
+              <div class="row mb-2">
+                  <div class="col">
+                      <h3>Day 2 (Noble Advisor)</h3>
+                  </div>
+                  <div class="col text-end">
+                      <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay2Noble" onclick="toggleTable('day2NobleTable')">Collapse</button>
+                  </div>
+              </div>
+              <table id="day2NobleTable" class="table table-striped w-100">
+                  <thead>
+                      <tr>
+                          <th>Appointment Time</th>
+                          <th>Alliance/Player</th>
+                          <th>Training Speedups</th>
+                      </tr>
+                  </thead>
+                <tbody></tbody>
+            </table>
+          </div>
      </div>
 
       <div class="day-section" style="display: none;">
-          <h2>Day 4 Appointments (Noble Advisor)</h2>
-           <table id="day4NobleTable" class="table table-striped">
+          <div class="row mb-2">
+              <div class="col">
+                  <h2>Day 4 Appointments (Noble Advisor)</h2>
+              </div>
+              <div class="col text-end">
+                  <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay4Noble" onclick="toggleTable('day4NobleTable')">Collapse</button>
+              </div>
+          </div>
+           <table id="day4NobleTable" class="table table-striped w-100">
                 <thead>
                     <tr>
                         <th>Appointment Time</th>
@@ -140,22 +181,39 @@
                 </thead>
               <tbody></tbody>
           </table>
-          <table id="day4MinisterTable" class="table table-striped">
-              <thead>
-                  <tr>
-                      <th>Appointment Time</th>
-                      <th>Alliance/Player</th>
-                      <th>Speedups Cn/Rs</th>
-                      <th>TrueGold</th>
-                  </tr>
-              </thead>
-            <tbody></tbody>
-        </table>
+          <div id="day4MinisterSection">
+              <div class="row mb-2">
+                  <div class="col">
+                      <h3>Day 4 (Chief Minister)</h3>
+                  </div>
+                  <div class="col text-end">
+                      <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay4Minister" onclick="toggleTable('day4MinisterTable')">Collapse</button>
+                  </div>
+              </div>
+              <table id="day4MinisterTable" class="table table-striped w-100">
+                  <thead>
+                      <tr>
+                          <th>Appointment Time</th>
+                          <th>Alliance/Player</th>
+                          <th>Speedups Cn/Rs</th>
+                          <th>TrueGold</th>
+                      </tr>
+                  </thead>
+                <tbody></tbody>
+            </table>
+          </div>
      </div>
 
       <div class="day-section" style="display: none;">
-           <h2>Day 5 Appointments (Chief Minister)</h2>
-            <table id="day5MinisterTable" class="table table-striped">
+           <div class="row mb-2">
+               <div class="col">
+                   <h2>Day 5 Appointments (Chief Minister)</h2>
+               </div>
+               <div class="col text-end">
+                   <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay5Minister" onclick="toggleTable('day5MinisterTable')">Collapse</button>
+               </div>
+           </div>
+            <table id="day5MinisterTable" class="table table-striped w-100">
                 <thead>
                     <tr>
                         <th>Appointment Time</th>
@@ -166,16 +224,26 @@
                 </thead>
               <tbody></tbody>
           </table>
-          <table id="day5NobleTable" class="table table-striped">
-              <thead>
-                  <tr>
-                      <th>Appointment Time</th>
-                      <th>Alliance/Player</th>
-                      <th>Training Speedups</th>
-                  </tr>
-              </thead>
-            <tbody></tbody>
-        </table>
+          <div id="day5NobleSection">
+              <div class="row mb-2">
+                  <div class="col">
+                      <h3>Day 5 (Noble Advisor)</h3>
+                  </div>
+                  <div class="col text-end">
+                      <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay5Noble" onclick="toggleTable('day5NobleTable')">Collapse</button>
+                  </div>
+              </div>
+              <table id="day5NobleTable" class="table table-striped w-100">
+                  <thead>
+                      <tr>
+                          <th>Appointment Time</th>
+                          <th>Alliance/Player</th>
+                          <th>Training Speedups</th>
+                      </tr>
+                  </thead>
+                <tbody></tbody>
+            </table>
+          </div>
      </div>
 
       <div class="day-section" style="display: none;">
@@ -224,7 +292,45 @@
             });
             const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
             tooltipTriggerList.forEach(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+            initTableStates();
         });
+
+        /**
+         * Toggles the visibility of a table and updates the button text.
+         * @param {string} tableId - The ID of the table to toggle.
+         */
+        function toggleTable(tableId) {
+            const table = document.getElementById(tableId);
+            const button = document.getElementById('toggle' + tableId.charAt(0).toUpperCase() + tableId.slice(1).replace('Table', ''));
+            if (table.style.display === 'none') {
+                table.style.display = '';
+                button.textContent = 'Collapse';
+                localStorage.setItem(tableId + 'Visible', 'true');
+            } else {
+                table.style.display = 'none';
+                button.textContent = 'Expand';
+                localStorage.setItem(tableId + 'Visible', 'false');
+            }
+        }
+
+        /**
+         * Initializes the visibility states of tables from localStorage.
+         */
+        function initTableStates() {
+            const tables = ['day1MinisterTable', 'day1NobleTable', 'day2MinisterTable', 'day2NobleTable', 'day4NobleTable', 'day4MinisterTable', 'day5MinisterTable', 'day5NobleTable'];
+            tables.forEach(tableId => {
+                const button = document.getElementById('toggle' + tableId.charAt(0).toUpperCase() + tableId.slice(1).replace('Table', ''));
+                const isVisible = localStorage.getItem(tableId + 'Visible') !== 'false';
+                const table = document.getElementById(tableId);
+                if (isVisible) {
+                    table.style.display = '';
+                    button.textContent = 'Collapse';
+                } else {
+                    table.style.display = 'none';
+                    button.textContent = 'Expand';
+                }
+            });
+        }
     </script>
 </body>
 </html>
