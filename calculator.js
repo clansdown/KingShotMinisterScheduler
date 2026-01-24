@@ -502,8 +502,12 @@ function populateTable(tableId, appointments) {
         const row = tbody.insertRow();
         const cell = row.insertCell(0);
         cell.textContent = 'No Assignments';
-        cell.colSpan = tableId.includes('Noble') ? 3 : 4;
+        cell.colSpan = tableId.includes('Noble') ? 4 : 5; // Updated colspan for extra action column
     } else {
+        const dayMatch = tableId.match(/day(\d+)/);
+        const day = dayMatch ? parseInt(dayMatch[1]) : 0;
+        const role = tableId.includes('Minister') ? 'ministers' : 'advisors';
+
         appointments.forEach(app => {
             const row = tbody.insertRow();
             row.insertCell(0).textContent = `${app.start}–${app.end}`;
@@ -512,7 +516,38 @@ function populateTable(tableId, appointments) {
             if (!tableId.includes('Noble')) {
                 row.insertCell(3).textContent = app.truegold;
             }
+            
+            // Actions Column
+            const actionsCell = row.insertCell(tableId.includes('Noble') ? 3 : 4);
+            
+            // Reassign Button
+            const reassignBtn = document.createElement('button');
+            reassignBtn.className = 'btn btn-sm btn-outline-primary me-1';
+            reassignBtn.textContent = 'Reassign';
+            reassignBtn.onclick = () => openAssignmentModal(app.alliance, app.player, {
+                day: day,
+                role: role,
+                existingSlotStart: app.start,
+                existingSlotEnd: app.end
+            });
+            actionsCell.appendChild(reassignBtn);
+            
+            // Remove Button (X)
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'btn btn-sm btn-outline-danger';
+            removeBtn.innerHTML = '&#10060;'; // Unicode X
+            removeBtn.title = 'Remove Assignment';
+            removeBtn.onclick = () => removeAssignment(day, role, app.start, app.alliance, app.player);
+            actionsCell.appendChild(removeBtn);
         });
+    }
+    
+    // Update header to add "Actions" column if not already there
+    const thead = document.querySelector(`#${tableId} thead tr`);
+    if (thead && !thead.lastElementChild.textContent.includes('Actions')) {
+        const th = document.createElement('th');
+        th.textContent = 'Actions';
+        thead.appendChild(th);
     }
 }
 
@@ -528,7 +563,16 @@ function populateWaitingList(waiting) {
     } else {
         waiting.forEach(player => {
             const li = document.createElement('li');
-            li.textContent = `${player.alliance}/${player.player} - Speedups: S:${player.speedups.soldier} C:${player.speedups.construction} R:${player.speedups.research} - TrueGold: ${player.truegold} - Time Slots: ${player.timeSlots}`;
+            li.className = 'mb-2';
+            li.textContent = `${player.alliance}/${player.player} - Speedups: S:${player.speedups.soldier} C:${player.speedups.construction} R:${player.speedups.research} - TrueGold: ${player.truegold} - Time Slots: ${player.timeSlots} `;
+            
+            // Assign Button
+            const assignBtn = document.createElement('button');
+            assignBtn.className = 'btn btn-sm btn-success ms-2';
+            assignBtn.textContent = 'Assign';
+            assignBtn.onclick = () => openAssignmentModal(player.alliance, player.player);
+            li.appendChild(assignBtn);
+            
             ol.appendChild(li);
         });
     }
@@ -545,7 +589,18 @@ function updateFilteredList(filteredOut) {
         ol.innerHTML = '';
         filteredOut.forEach(player => {
             const li = document.createElement('li');
-            li.textContent = `${player[ALLIANCE]}/${player[PLAYER]} - Speedups: S:${Math.round(player[SOLDIER_TRAINING])} C:${Math.round(player[CONSTRUCTION])} R:${Math.round(player[RESEARCH])} - TrueGold: ${Math.round(player[TRUEGOLD_PIECES])}`;
+            li.className = 'mb-2';
+            // @ts-ignore
+            li.textContent = `${player[ALLIANCE]}/${player[PLAYER]} - Speedups: S:${Math.round(player[SOLDIER_TRAINING])} C:${Math.round(player[CONSTRUCTION])} R:${Math.round(player[RESEARCH])} - TrueGold: ${Math.round(player[TRUEGOLD_PIECES])} `;
+            
+            // Assign Button
+            const assignBtn = document.createElement('button');
+            assignBtn.className = 'btn btn-sm btn-success ms-2';
+            assignBtn.textContent = 'Assign';
+            // @ts-ignore
+            assignBtn.onclick = () => openAssignmentModal(player[ALLIANCE], player[PLAYER]);
+            li.appendChild(assignBtn);
+            
             ol.appendChild(li);
         });
         section.style.display = 'block';
@@ -667,7 +722,8 @@ function calculateScheduleData(players, minHours) {
                         speedups: `${Math.round(player[CONSTRUCTION])} / ${Math.round(player[RESEARCH])}`,
                         truegold: player[TRUEGOLD_PIECES]
                     });
-                    schedulerData.playerAssignments[playerId].ministerAssigned = true;
+                    schedulerData.playerAssignments[playerId].advisorAssigned = true; // Counts as advisor assignment
+                    assignmentsMade.push({ day: day, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
                     assigned = true;
                     break;
                 }
@@ -723,22 +779,7 @@ async function processAndSchedule(players, minHours) {
     renderUI(schedulerData);
 }
 
-// Event listener for file input
-document.getElementById('csvFileInput').addEventListener('change', function(event) {
-    const file = event.target.files[0];
-    if (file) {
-        document.getElementById('loadingIndicator').style.display = 'block';
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const csvText = e.target.result;
-            const players = parseCsvToObjects(csvText);
-            const minHours = parseInt(document.getElementById('minHoursInput').value) || 20;
-            // Process and schedule
-            processAndSchedule(players, minHours);
-        };
-        reader.readAsText(file);
-    }
-});
+
 
 /**
  * Loads the scheduler system with the provided data.
@@ -818,42 +859,529 @@ function isValidSchedulerData(data) {
 
 // Event Listeners for Import/Export
 
-document.getElementById('exportBtn').addEventListener('click', exportSchedulerData);
-
-const importBtn = document.getElementById('importBtn');
-const jsonFileInput = document.getElementById('jsonFileInput');
-
-importBtn.addEventListener('click', function() {
-    jsonFileInput.click();
-});
-
-jsonFileInput.addEventListener('change', function(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = async function(e) {
-        try {
-            const text = e.target.result;
-            const data = JSON.parse(text);
-            
-            if (isValidSchedulerData(data)) {
-                loadSchedulerSystem(data);
-                // Save to OPFS
-                await saveSchedulerData(data);
-            } else {
-                alert('Invalid scheduler data file. Missing required fields.');
-            }
-        } catch (error) {
-            console.error('Error importing file:', error);
-            alert('Error parsing JSON file.');
-        } finally {
-            // Reset input so same file can be selected again if needed
-            jsonFileInput.value = '';
-        }
-    };
-    reader.readAsText(file);
-});
-
 // Auto-load on startup
-document.addEventListener('DOMContentLoaded', loadRecentData);
+document.addEventListener('DOMContentLoaded', () => {
+    loadRecentData();
+    // Initialize modals
+    // @ts-ignore
+    new bootstrap.Modal(document.getElementById('addPlayerModal'));
+    // @ts-ignore
+    new bootstrap.Modal(document.getElementById('assignmentModal'));
+    // @ts-ignore
+    new bootstrap.Modal(document.getElementById('removeUserModal'));
+
+    // Setup event listeners after DOM is loaded
+
+    // Event listener for CSV file input
+    document.getElementById('csvFileInput').addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            document.getElementById('loadingIndicator').style.display = 'block';
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const csvText = e.target.result;
+                const players = parseCsvToObjects(csvText);
+                const minHours = parseInt(document.getElementById('minHoursInput').value) || 20;
+                // Process and schedule
+                processAndSchedule(players, minHours);
+            };
+            reader.readAsText(file);
+        }
+    });
+
+    // Event listeners for Import/Export
+    document.getElementById('exportBtn').addEventListener('click', exportSchedulerData);
+
+    const importBtn = document.getElementById('importBtn');
+    const jsonFileInput = document.getElementById('jsonFileInput');
+
+    importBtn.addEventListener('click', function() {
+        jsonFileInput.click();
+    });
+
+    jsonFileInput.addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                const text = e.target.result;
+                const data = JSON.parse(text);
+
+                if (isValidSchedulerData(data)) {
+                    loadSchedulerSystem(data);
+                    // Save to OPFS
+                    await saveSchedulerData(data);
+                } else {
+                    alert('Invalid scheduler data file. Missing required fields.');
+                }
+            } catch (error) {
+                console.error('Error importing file:', error);
+                alert('Error parsing JSON file.');
+            } finally {
+                // Reset input so same file can be selected again if needed
+                jsonFileInput.value = '';
+            }
+        };
+        reader.readAsText(file);
+    });
+});
+
+// --- Management Logic ---
+
+/**
+ * Handles the "Add Player" form submission.
+ * Parses input, allocates speedups, filters, and attempts to find slots.
+ * Updates UI and notifies the user.
+ */
+function submitAddPlayer() {
+    const form = document.getElementById('addPlayerForm');
+    // @ts-ignore
+    const formData = new FormData(form);
+    
+    // Create new player object
+    const checkedCategories = [];
+    if (formData.get('soldierTraining')) checkedCategories.push('Soldier Training');
+    if (formData.get('construction')) checkedCategories.push('Construction');
+    if (formData.get('research')) checkedCategories.push('Research');
+
+    const newPlayer = {
+        [ALLIANCE]: formData.get('alliance'),
+        [PLAYER]: formData.get('player'),
+        [GENERAL_SPEEDUPS]: parseFloat(formData.get('generalSpeedups').toString()) || 0,
+        [GENERAL_USED_FOR]: checkedCategories.join(', '),
+        [SOLDIER_TRAINING]: parseFloat(formData.get('soldierTraining').toString()) || 0,
+        [CONSTRUCTION]: parseFloat(formData.get('construction').toString()) || 0,
+        [RESEARCH]: parseFloat(formData.get('research').toString()) || 0,
+        [TRUEGOLD_PIECES]: parseFloat(formData.get('truegoldPieces').toString()) || 0,
+        [TIME_SLOT_START_UTC]: normalizeTime(formData.get('timeSlotStartUtc').toString()) || '00:00',
+        [TIME_SLOT_END_UTC]: normalizeTime(formData.get('timeSlotEndUtc').toString()) || '23:59',
+        [ALL_TIMES]: formData.get('allTimes')
+    };
+    
+    // Parse time ranges
+    // @ts-ignore
+    newPlayer.availableTimeRanges = parseTimeRanges(newPlayer[ALL_TIMES]);
+    // @ts-ignore
+    const overallRanges = parseTimeRanges(`${newPlayer[TIME_SLOT_START_UTC]}-${newPlayer[TIME_SLOT_END_UTC]}`);
+    newPlayer.availableTimeRanges = unionTimeRanges(overallRanges.concat(newPlayer.availableTimeRanges));
+
+    // 1. Allocate General Speedups
+    // @ts-ignore
+    allocateGeneralSpeedups(newPlayer);
+    
+    // Add to rawPlayers and processedPlayers
+    // @ts-ignore
+    schedulerData.rawPlayers.push(JSON.parse(JSON.stringify(newPlayer)));
+    // @ts-ignore
+    schedulerData.processedPlayers.push(newPlayer);
+    
+    // Initialize assignment tracking
+    // @ts-ignore
+    const playerId = `${newPlayer[PLAYER]}-${newPlayer[ALLIANCE]}`;
+    schedulerData.playerAssignments[playerId] = { ministerAssigned: false, advisorAssigned: false };
+
+    // 2. Filter Check
+    const minHours = schedulerData.minHours;
+    // @ts-ignore
+    const isMinisterQualified = (newPlayer[CONSTRUCTION] + newPlayer[RESEARCH]) >= minHours;
+    // @ts-ignore
+    const isAdvisorQualified = newPlayer[SOLDIER_TRAINING] >= minHours;
+    
+    if (!isMinisterQualified && !isAdvisorQualified) {
+        // @ts-ignore
+        schedulerData.filteredOut.push(newPlayer);
+        finishManagementAction("Player added but filtered out due to insufficient hours.");
+        return;
+    }
+
+    // 3. Schedule Logic (Incremental)
+    /** @type {Array<{day: number, role: string, slotStr: string}>} */
+    const assignmentsMade = [];
+    
+    // Attempt Minister (Days 1, 2, 5)
+    if (isMinisterQualified) {
+        const ministerDays = [1, 2, 5];
+        for (const day of ministerDays) {
+            const taken = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
+            const slots = generateTimeSlots();
+            let assigned = false;
+            
+            for (const slot of slots) {
+                // @ts-ignore
+                if (!taken.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
+                    schedulerData.assignments[day].ministers.push({
+                        start: slot.start,
+                        end: slot.end,
+                        // @ts-ignore
+                        alliance: newPlayer[ALLIANCE],
+                        // @ts-ignore
+                        player: newPlayer[PLAYER],
+                        // @ts-ignore
+                        speedups: `${Math.round(newPlayer[CONSTRUCTION])} / ${Math.round(newPlayer[RESEARCH])}`,
+                        // @ts-ignore
+                        truegold: newPlayer[TRUEGOLD_PIECES]
+                    });
+                    schedulerData.playerAssignments[playerId].ministerAssigned = true;
+                    assignmentsMade.push(`Day ${day} Minister (${slot.start}-${slot.end})`);
+                    assigned = true;
+                    break;
+                }
+            }
+            if (assigned) break; // One slot max for Minister
+        }
+    }
+    
+    // Attempt Advisor (Day 4)
+    if (isAdvisorQualified) {
+        const day = 4;
+        const advisorSlots = generateTimeSlots();
+        const ministerSlots = generateTimeSlots(); // For overflow
+        const takenAdvisor = new Set(schedulerData.assignments[day].advisors.map(a => a.start));
+        const takenMinister = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
+        let assigned = false;
+        
+        // Try standard Advisor slot
+        for (const slot of advisorSlots) {
+             // @ts-ignore
+             if (!takenAdvisor.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
+                schedulerData.assignments[day].advisors.push({
+                    start: slot.start,
+                    end: slot.end,
+                    alliance: player[ALLIANCE],
+                    player: player[PLAYER],
+                    speedups: Math.round(player[SOLDIER_TRAINING]),
+                    truegold: player[TRUEGOLD_PIECES]
+                });
+                schedulerData.playerAssignments[playerId].advisorAssigned = true;
+                assignmentsMade.push({ day: day, role: 'advisors', slotStr: `${slot.start}-${slot.end}` });
+                assigned = true;
+                break;
+             }
+        }
+        
+        // Overflow to Chief Minister if needed
+        if (!assigned) {
+             for (const slot of ministerSlots) {
+                 // @ts-ignore
+                 if (!takenMinister.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
+                    schedulerData.assignments[day].ministers.push({
+                        start: slot.start,
+                        end: slot.end,
+                        // @ts-ignore
+                        alliance: newPlayer[ALLIANCE],
+                        // @ts-ignore
+                        player: newPlayer[PLAYER],
+                        // @ts-ignore
+                        speedups: `${Math.round(newPlayer[CONSTRUCTION])} / ${Math.round(newPlayer[RESEARCH])}`,
+                        // @ts-ignore
+                        truegold: newPlayer[TRUEGOLD_PIECES]
+                    });
+                    schedulerData.playerAssignments[playerId].advisorAssigned = true; // Counts as advisor
+                    assignmentsMade.push(`Day 4 Minister (Overflow Advisor) (${slot.start}-${slot.end})`);
+                    assigned = true;
+                    break;
+                 }
+             }
+        }
+    }
+    
+    // 4. Finalize
+    if (assignmentsMade.length === 0) {
+        schedulerData.waitingList.push({
+            // @ts-ignore
+            alliance: newPlayer[ALLIANCE],
+            // @ts-ignore
+            player: newPlayer[PLAYER],
+            speedups: {
+                // @ts-ignore
+                soldier: Math.round(newPlayer[SOLDIER_TRAINING]),
+                // @ts-ignore
+                construction: Math.round(newPlayer[CONSTRUCTION]),
+                // @ts-ignore
+                research: Math.round(newPlayer[RESEARCH])
+            },
+            // @ts-ignore
+            truegold: Math.round(newPlayer[TRUEGOLD_PIECES]),
+            // @ts-ignore
+            timeSlots: newPlayer.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ') || 'No available ranges'
+        });
+        finishManagementAction("Player added to Waiting List (no slots found).");
+    } else {
+        const assignmentStrings = assignmentsMade.map(assignment => {
+            const roleName = assignment.role === 'ministers' ? 'Chief Minister' : 'Noble Advisor';
+            return `Day ${assignment.day} ${roleName} (${assignment.slotStr})`;
+        });
+        finishManagementAction(`Player added. Assigned: ${assignmentStrings.join(', ')}.`);
+    }
+}
+
+/**
+ * Common finish steps for management actions: save, render, notify, close modals.
+ * @param {string} message - Notification message.
+ */
+async function finishManagementAction(message) {
+    // Sort assignments before rendering
+    [1, 2, 4, 5].forEach(day => {
+        schedulerData.assignments[day].ministers.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+        schedulerData.assignments[day].advisors.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+    });
+
+    try {
+        await saveSchedulerData(schedulerData);
+    } catch (e) {
+        console.error("Save failed", e);
+    }
+    renderUI(schedulerData);
+    
+    // Close modals
+    // @ts-ignore
+    bootstrap.Modal.getInstance(document.getElementById('addPlayerModal'))?.hide();
+    // @ts-ignore
+    bootstrap.Modal.getInstance(document.getElementById('assignmentModal'))?.hide();
+    // @ts-ignore
+    bootstrap.Modal.getInstance(document.getElementById('removeUserModal'))?.hide();
+    
+    // Show notification
+    const alert = document.getElementById('assignmentNotification');
+    document.getElementById('assignmentNotificationText').textContent = message;
+    alert.style.display = 'block';
+}
+
+/**
+ * Removes a user entirely from the system.
+ */
+function openRemoveUserModal() {
+    const select = document.getElementById('removeUserSelect');
+    select.innerHTML = '';
+    
+    // Populate with all players sorted
+    const allPlayers = [...schedulerData.processedPlayers].sort((a, b) => 
+        (a.alliance + a.player).localeCompare(b.alliance + b.player)
+    );
+    
+    allPlayers.forEach(p => {
+        const option = document.createElement('option');
+        option.value = `${p.player}-${p.alliance}`;
+        option.textContent = `${p.alliance} / ${p.player}`;
+        select.appendChild(option);
+    });
+    
+    // @ts-ignore
+    new bootstrap.Modal(document.getElementById('removeUserModal')).show();
+}
+
+function submitRemoveUser() {
+    const select = document.getElementById('removeUserSelect');
+    // @ts-ignore
+    const idToRemove = select.value;
+    if (!idToRemove) return;
+    
+    // 1. Remove from player lists
+    schedulerData.rawPlayers = schedulerData.rawPlayers.filter(p => `${p.player}-${p.alliance}` !== idToRemove);
+    schedulerData.processedPlayers = schedulerData.processedPlayers.filter(p => `${p.player}-${p.alliance}` !== idToRemove);
+    schedulerData.filteredOut = schedulerData.filteredOut.filter(p => `${p.player}-${p.alliance}` !== idToRemove);
+    schedulerData.waitingList = schedulerData.waitingList.filter(p => `${p.player}-${p.alliance}` !== idToRemove);
+    
+    // 2. Remove from assignments
+    [1, 2, 4, 5].forEach(day => {
+        schedulerData.assignments[day].ministers = schedulerData.assignments[day].ministers.filter(a => `${a.player}-${a.alliance}` !== idToRemove);
+        schedulerData.assignments[day].advisors = schedulerData.assignments[day].advisors.filter(a => `${a.player}-${a.alliance}` !== idToRemove);
+    });
+    
+    // 3. Remove from assignment tracking
+    delete schedulerData.playerAssignments[idToRemove];
+    
+    finishManagementAction("User removed successfully.");
+}
+
+// --- Assignment/Reassignment Logic ---
+
+let currentReassignTarget = null; // { day, role, existingSlotStart, existingSlotEnd, player, alliance } OR null (new assignment)
+
+/**
+ * Opens the assignment modal.
+ * @param {string} alliance 
+ * @param {string} player 
+ * @param {Object} [existing] - If reassigning, details of the current slot.
+ */
+function openAssignmentModal(alliance, player, existing = null) {
+    currentReassignTarget = existing ? { ...existing, alliance, player } : { alliance, player };
+    
+    const title = existing ? `Reassign ${alliance}/${player}` : `Assign ${alliance}/${player}`;
+    document.getElementById('assignmentModalTitle').textContent = title;
+    
+    updateAssignmentSlots();
+    // @ts-ignore
+    new bootstrap.Modal(document.getElementById('assignmentModal')).show();
+}
+
+/**
+ * Updates the list of available slots in the modal based on selected day/role.
+ */
+function updateAssignmentSlots() {
+    // @ts-ignore
+    const day = parseInt(document.getElementById('assignDaySelect').value);
+    // @ts-ignore
+    const role = document.getElementById('assignRoleSelect').value; // 'ministers' or 'advisors'
+    const container = document.getElementById('assignmentSlotsContainer');
+    container.innerHTML = '';
+    
+    // Get target player object
+    const targetId = currentReassignTarget.player + '-' + currentReassignTarget.alliance;
+    const playerObj = schedulerData.processedPlayers.find(p => `${p.player}-${p.alliance}` === targetId);
+    
+    if (!playerObj) return;
+
+    // Get taken slots
+    const currentAssignments = schedulerData.assignments[day][role];
+    const takenStarts = new Set(currentAssignments.map(a => a.start));
+    
+    // Determine qualification check
+    let qualified = false;
+    if (role === 'ministers') {
+        // Any minister slot requires minister qualification OR it's Day 4 overflow (which counts as advisor)
+        // BUT strict qualification: 
+        if ((playerObj[CONSTRUCTION] + playerObj[RESEARCH]) >= schedulerData.minHours) qualified = true;
+        // Exception: Day 4 Minister slot can be used by Advisor qualified players as overflow
+        if (day === 4 && playerObj[SOLDIER_TRAINING] >= schedulerData.minHours) qualified = true; 
+    } else {
+        if (playerObj[SOLDIER_TRAINING] >= schedulerData.minHours) qualified = true;
+    }
+    
+    if (!qualified) {
+        container.innerHTML = '<div class="alert alert-warning">Player does not meet minimum hours for this role/day configuration.</div>';
+        return;
+    }
+
+    const slots = generateTimeSlots();
+    slots.forEach(slot => {
+        if (takenStarts.has(slot.start)) return; // Slot taken
+        
+        // Basic availability check
+        if (!isSlotAvailable(playerObj, slot.start, slot.end)) return; // Player busy (time conflict)
+        
+        // Create List Item
+        const item = document.createElement('button');
+        item.className = 'list-group-item list-group-item-action';
+        
+        // Highlight if "preferred" (matches availableTimeRanges explicitly)
+        // isSlotAvailable returns true if they fit. To "green" it, we can check if it falls inside a specific range 
+        // vs just the overall window. But isSlotAvailable already does logic. 
+        // Let's assume green if it fits one of their specific ranges if they have any.
+        // @ts-ignore
+        if (playerObj.availableTimeRanges.length > 0) {
+            // Re-use logic: isSlotAvailable logic implies it fits. 
+            item.classList.add('list-group-item-success');
+        }
+        
+        item.textContent = `${slot.start} - ${slot.end}`;
+        item.onclick = () => performAssignment(day, role, slot.start, slot.end);
+        container.appendChild(item);
+    });
+    
+    if (container.children.length === 0) {
+        container.innerHTML = '<div class="p-3 text-muted">No available slots found.</div>';
+    }
+}
+
+/**
+ * Executes the assignment selected from the modal.
+ */
+function performAssignment(day, role, start, end) {
+    const { alliance, player } = currentReassignTarget;
+    const targetId = `${player}-${alliance}`;
+    const playerObj = schedulerData.processedPlayers.find(p => `${p.player}-${p.alliance}` === targetId);
+
+    // 1. If Reassigning, remove old assignment first
+    if (currentReassignTarget.existingSlotStart) {
+        const oldDay = currentReassignTarget.day;
+        const oldRole = currentReassignTarget.role;
+        // Remove from list
+        schedulerData.assignments[oldDay][oldRole] = schedulerData.assignments[oldDay][oldRole].filter(
+            a => !(a.start === currentReassignTarget.existingSlotStart && a.alliance === alliance && a.player === player)
+        );
+    } 
+    // If Assigning from list, remove from waiting/filtered
+    else {
+        schedulerData.waitingList = schedulerData.waitingList.filter(p => !(`${p.player}-${p.alliance}` === targetId));
+        schedulerData.filteredOut = schedulerData.filteredOut.filter(p => !(`${p.player}-${p.alliance}` === targetId));
+    }
+
+    // 2. Add new assignment
+    const newAssignment = {
+        start: start,
+        end: end,
+        alliance: alliance,
+        player: player,
+        // Calc speedups based on role
+        speedups: role === 'ministers' 
+            ? `${Math.round(playerObj[CONSTRUCTION])} / ${Math.round(playerObj[RESEARCH])}`
+            : Math.round(playerObj[SOLDIER_TRAINING]),
+        truegold: playerObj[TRUEGOLD_PIECES]
+    };
+    schedulerData.assignments[day][role].push(newAssignment);
+    
+    // 3. Update Tracking
+    // Note: This logic is simple; doesn't strictly enforce "1 minister slot max" if user overrides via UI.
+    // But we update flags for consistency.
+    if (role === 'ministers') {
+        // Special case: Day 4 Minister might be Advisor overflow
+        // If we are on Day 4 and strict minister req isn't met but advisor is...
+        // For simplicity, if it's Day 4, we mark advisorAssigned if they are advisor qualified?
+        // Or just mark based on the role column?
+        // Let's stick to the convention: Day 4 minister slot is ambiguous.
+        // We'll just mark ministerAssigned unless it's strictly advisor logic. 
+        // However, user manual assignment overrides rules.
+        schedulerData.playerAssignments[targetId].ministerAssigned = true;
+    } else {
+        schedulerData.playerAssignments[targetId].advisorAssigned = true;
+    }
+
+    finishManagementAction(`Assigned ${alliance}/${player} to Day ${day} ${role === 'ministers' ? 'Chief Minister' : 'Noble Advisor'} (${start}-${end}).`);
+}
+
+/**
+ * Unassigns a player from a specific slot.
+ */
+function removeAssignment(day, role, start, alliance, player) {
+    // Remove from array
+    schedulerData.assignments[day][role] = schedulerData.assignments[day][role].filter(
+        a => !(a.start === start && a.alliance === alliance && a.player === player)
+    );
+    
+    // We don't necessarily reset the 'ministerAssigned' flag because they might have other slots?
+    // Current logic enforces 1 slot per role type generally. 
+    // Checking if they have other slots of this type is safer.
+    const hasOtherMinister = [1,2,4,5].some(d => schedulerData.assignments[d].ministers.some(a => a.alliance === alliance && a.player === player));
+    const hasOtherAdvisor = [1,2,4,5].some(d => schedulerData.assignments[d].advisors.some(a => a.alliance === alliance && a.player === player));
+    
+    const id = `${player}-${alliance}`;
+    schedulerData.playerAssignments[id].ministerAssigned = hasOtherMinister;
+    schedulerData.playerAssignments[id].advisorAssigned = hasOtherAdvisor;
+
+    // Add back to waiting list? The prompt didn't strictly say, but usually yes.
+    // Or just leave them floating (available to be assigned). 
+    // "cancel just discards, add adds... remove removes... reassign lets user assign"
+    // We'll add them to waiting list so they are visible for re-adding.
+    if (!hasOtherMinister && !hasOtherAdvisor) {
+        // Re-construct waiting entry
+        const p = schedulerData.processedPlayers.find(pl => pl.alliance === alliance && pl.player === player);
+        if (p) {
+            schedulerData.waitingList.push({
+                alliance: p[ALLIANCE],
+                player: p[PLAYER],
+                speedups: {
+                    soldier: Math.round(p[SOLDIER_TRAINING]),
+                    construction: Math.round(p[CONSTRUCTION]),
+                    research: Math.round(p[RESEARCH])
+                },
+                truegold: Math.round(p[TRUEGOLD_PIECES]),
+                timeSlots: p.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ') || 'No available ranges'
+            });
+        }
+    }
+
+    finishManagementAction(`Removed assignment for ${alliance}/${player}.`);
+}
