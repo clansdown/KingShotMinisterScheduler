@@ -623,8 +623,15 @@ function populateDebugTable(players) {
         return;
     }
     section.innerHTML = `
-        <h2>Player Information</h2>
-        <table id="debugTable" class="table table-striped">
+        <div class="row mb-2">
+            <div class="col">
+                <h2>Player Information</h2>
+            </div>
+            <div class="col text-end">
+                <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDebugTable" onclick="toggleTable('debugTable')">Expand</button>
+            </div>
+        </div>
+        <table id="debugTable" class="table table-striped w-100" style="display: none;">
             <thead>
                 <tr>
                     <th>Player/Alliance</th>
@@ -640,6 +647,19 @@ function populateDebugTable(players) {
             <tbody></tbody>
         </table>
     `;
+
+    // Set initial visibility based on localStorage
+    const button = document.getElementById('toggleDebugTable');
+    const table = document.getElementById('debugTable');
+    const isVisible = localStorage.getItem('debugTableVisible') === 'true';
+    if (isVisible) {
+        table.style.display = '';
+        button.textContent = 'Collapse';
+    } else {
+        table.style.display = 'none';
+        button.textContent = 'Expand';
+        localStorage.setItem('debugTableVisible', 'false');
+    }
 
     const tbody = section.querySelector('#debugTable tbody');
     const sortedPlayers = players.slice().sort((a, b) => {
