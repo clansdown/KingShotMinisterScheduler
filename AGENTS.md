@@ -29,7 +29,7 @@ Follow these rules for consistency. The codebase uses vanilla JavaScript (ES5+) 
 
 ### Formatting
 - **Indentation**: 4 spaces (match editor default).
-- **Line Length**: <100 characters.
+- **Line Length**: <140 characters.
 - **Semicolons**: Always use at end of statements.
 - **Braces**: Always use for blocks (e.g., `if (cond) { ... }`).
 - **Spacing**: One space around operators (`a + b`), after commas, no trailing spaces.
@@ -39,7 +39,8 @@ Follow these rules for consistency. The codebase uses vanilla JavaScript (ES5+) 
 ### Types and TypeScript
 - No TypeScript. Use JSDoc for type annotations.
 - Example: `/** @param {Array<Object>} players - Array of player objects with string/number fields */`
-- Document params, returns, and complex types (e.g., `{start: string, end: string}`).
+- Document ALL params, returns, and complex types (e.g., `{start: string, end: string}`). This includes local variables with complex types.
+- Document ALL arrays, including in local variables, with jsdoc types.
 
 ### Naming Conventions
 - **Variables/Functions**: camelCase (e.g., `parseCsvToObjects`, `playerAlliance`).

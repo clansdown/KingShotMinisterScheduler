@@ -68,12 +68,6 @@
          </div>
     </div>
     <div class="row">
-        <div class="col-auto">
-            <div class="input-group">
-                <span class="input-group-text">Min Hours</span>
-                <input type="number" id="minHoursInput" class="form-control" min="0" value="20" data-bs-toggle="tooltip" title="Minimum speedups (hours) required for Construction + Research combined, or for Soldier Training, to include the player in scheduling.">
-            </div>
-        </div>
         <div class="col">
             <div class="input-group">
                 <span class="input-group-text">New from CSV</span>
@@ -86,7 +80,40 @@
             <input type="file" id="jsonFileInput" accept=".json" style="display: none;">
         </div>
     </div>
-    
+     
+    <!-- Schedule Settings -->
+    <div class="row mb-3" id="scheduleSettings">
+        <div class="col">
+            <div class="card">
+                <div class="card-body py-2">
+                    <div class="d-flex align-items-center">
+                        <strong class="me-3">Schedule Settings:</strong>
+                        <div class="input-group me-3">
+                            <span class="input-group-text">Min Hours</span>
+                            <input type="number" id="minHoursInput" class="form-control" min="0" value="20" data-bs-toggle="tooltip" title="Minimum speedups (hours) required for Construction + Research combined, or for Soldier Training, to include the player in scheduling.">
+                        </div>
+                        <div class="input-group me-3">
+                            <label for="constructionKingDay" class="input-group-text">Construction King Day</label>
+                            <select id="constructionKingDay" class="form-select">
+                                <option value="1" selected>1</option>
+                                <option value="2">2</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="researchKingDay" class="input-group-text">Research King Day</label>
+                            <select id="researchKingDay" class="form-select">
+                                <option value="1">1</option>
+                                <option value="2" selected>2</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+     
     <!-- Management Toolbar -->
     <div class="row mb-3" id="managementToolbar">
         <div class="col">
