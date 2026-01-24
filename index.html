@@ -67,11 +67,17 @@
              </ul>
          </div>
     </div>
-    <div class="row">
+     <div class="row">
         <div class="col">
             <div class="input-group">
                 <span class="input-group-text">New from CSV</span>
                 <input type="file" id="csvFileInput" accept=".csv" class="form-control">
+            </div>
+        </div>
+        <div class="col-auto">
+            <div class="input-group">
+                <span class="input-group-text">Min Hours</span>
+                <input type="number" id="minHoursInput" class="form-control" min="0" value="20" data-bs-toggle="tooltip" title="Minimum speedups (hours) required for Construction + Research combined, or for Soldier Training, to include the player in scheduling.">
             </div>
         </div>
         <div class="col-auto">
@@ -223,8 +229,30 @@
           </div>
      </div>
 
-      <div class="day-section" style="display: none;">
-          <div class="row mb-2">
+       <div class="day-section" id="day3Section" style="display: none;">
+            <div class="row mb-2">
+                <div class="col">
+                    <h2>Day 3 Appointments (Chief Minister)</h2>
+                </div>
+                <div class="col text-end">
+                    <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay3Minister" onclick="toggleTable('day3MinisterTable')">Collapse</button>
+                </div>
+            </div>
+             <table id="day3MinisterTable" class="table table-striped w-100">
+                 <thead>
+                     <tr>
+                         <th>Appointment Time</th>
+                         <th>Alliance/Player</th>
+                         <th>Speedups Cn/Rs</th>
+                         <th>TrueGold</th>
+                     </tr>
+                 </thead>
+               <tbody></tbody>
+           </table>
+      </div>
+
+       <div class="day-section" style="display: none;">
+           <div class="row mb-2">
               <div class="col">
                   <h2>Day 4 Appointments (Noble Advisor)</h2>
               </div>
@@ -420,12 +448,13 @@
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label class="form-label">Day</label>
-                            <select class="form-select" id="assignDaySelect" onchange="updateAssignmentSlots()">
-                                <option value="1">Day 1</option>
-                                <option value="2">Day 2</option>
-                                <option value="4">Day 4</option>
-                                <option value="5">Day 5</option>
-                            </select>
+                             <select class="form-select" id="assignDaySelect" onchange="updateAssignmentSlots()">
+                                 <option value="1">Day 1</option>
+                                 <option value="2">Day 2</option>
+                                 <option value="3">Day 3</option>
+                                 <option value="4">Day 4</option>
+                                 <option value="5">Day 5</option>
+                             </select>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Role</label>
@@ -528,7 +557,7 @@
          * Initializes the visibility states of tables from localStorage.
          */
         function initTableStates() {
-            const tables = ['day1MinisterTable', 'day1NobleTable', 'day2MinisterTable', 'day2NobleTable', 'day4NobleTable', 'day4MinisterTable', 'day5MinisterTable', 'day5NobleTable'];
+             const tables = ['day1MinisterTable', 'day1NobleTable', 'day2MinisterTable', 'day2NobleTable', 'day3MinisterTable', 'day4NobleTable', 'day4MinisterTable', 'day5MinisterTable', 'day5NobleTable'];
             tables.forEach(tableId => {
                 const button = document.getElementById('toggle' + tableId.charAt(0).toUpperCase() + tableId.slice(1).replace('Table', ''));
                 const isVisible = localStorage.getItem(tableId + 'Visible') !== 'false';

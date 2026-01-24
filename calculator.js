@@ -63,6 +63,8 @@ const DEBUG = true;
  * @property {number} minHours - The minimum hours threshold used for processing.
  * @property {number} creationTimeMS - Creation timestamp in epoch milliseconds.
  * @property {number} lastModifiedTimeMS - Last modification timestamp in epoch milliseconds.
+ * @property {number} constructionKingDay - The day construction speedups are king-prioritized (default 1).
+ * @property {number} researchKingDay - The day research speedups are king-prioritized (default 2).
  */
 
 /**
@@ -72,13 +74,15 @@ const DEBUG = true;
 const schedulerData = {
     rawPlayers: [],
     processedPlayers: [],
-    assignments: { 1: {ministers: [], advisors: []}, 2: {ministers: [], advisors: []}, 4: {ministers: [], advisors: []}, 5: {ministers: [], advisors: []} },
+    assignments: { 1: {ministers: [], advisors: []}, 2: {ministers: [], advisors: []}, 3: {ministers: [], advisors: []}, 4: {ministers: [], advisors: []}, 5: {ministers: [], advisors: []} },
     waitingList: [],
     filteredOut: [],
     playerAssignments: {},
     minHours: 20,
     creationTimeMS: 0,
-    lastModifiedTimeMS: 0
+    lastModifiedTimeMS: 0,
+    constructionKingDay: 1,
+    researchKingDay: 2
 };
 
 // Constants for CSV field names (normalized to lowercase)
@@ -390,7 +394,7 @@ function isSlotAvailable(player, slotStart, slotEnd) {
  * @param {Array<WaitingPlayer>} waiting - Array to add players who cannot be assigned to either role.
  * @param {number} day - The day number (expected to be 4).
  */
-function scheduleNobleAdvisors(playerList, minHours, playerAssignments, assignments, waiting, day) {
+function scheduleNobleAdvisors(playerList, minHours, playerAssignments, assignments, waitingList, day) {
     // Sort players by training hours descending (highest first)
     playerList.sort((a, b) => b.soldierTraining - a.soldierTraining);
 
@@ -454,7 +458,7 @@ function scheduleNobleAdvisors(playerList, minHours, playerAssignments, assignme
 
         // Handle unassigned players
         if (!assigned) {
-            waiting.push({
+            waitingList.push({
                 alliance: player[ALLIANCE],
                 player: player[PLAYER],
                 speedups: {
@@ -523,7 +527,7 @@ function populateTable(tableId, appointments) {
             // Reassign Button
             const reassignBtn = document.createElement('button');
             reassignBtn.className = 'btn btn-sm btn-outline-primary me-1';
-            reassignBtn.textContent = 'Reassign';
+            reassignBtn.textContent = '🔃';
             reassignBtn.onclick = () => openAssignmentModal(app.alliance, app.player, {
                 day: day,
                 role: role,
@@ -690,11 +694,16 @@ function populateDebugTable(players) {
  * @param {Array<PlayerObject>} players - Array of player objects from CSV.
  * @param {number} minHours - Minimum hours required for construction+research or training.
  */
-function calculateScheduleData(players, minHours) {
+function calculateScheduleData(players) {
+    const minHours = parseInt(document.getElementById('minHoursInput').value) || 20;
+    const constructDay = parseInt(document.getElementById('constructionKingDay').value) || 1;
+    const researchDay = parseInt(document.getElementById('researchKingDay').value) || 2;
     const now = Date.now();
     schedulerData.creationTimeMS = now;
     schedulerData.lastModifiedTimeMS = now;
     schedulerData.minHours = minHours;
+    schedulerData.constructionKingDay = constructDay;
+    schedulerData.researchKingDay = researchDay;
     schedulerData.rawPlayers = JSON.parse(JSON.stringify(players));
     schedulerData.processedPlayers = players; // In-place modification will happen on this array
 
@@ -705,70 +714,172 @@ function calculateScheduleData(players, minHours) {
     const filtered = schedulerData.processedPlayers.filter(player => (player[CONSTRUCTION] + player[RESEARCH] >= minHours) || (player[SOLDIER_TRAINING] >= minHours));
     schedulerData.filteredOut = schedulerData.processedPlayers.filter(player => !filtered.includes(player));
 
-    // Create lists from filtered players
-    const ministerList = createMinisterList(filtered);
-    const advisorList = createAdvisorList(filtered);
-
     // Initialize assignments and tracking
-    schedulerData.assignments = { 1: {ministers: [], advisors: []}, 2: {ministers: [], advisors: []}, 4: {ministers: [], advisors: []}, 5: {ministers: [], advisors: []} };
+    schedulerData.assignments = { 1: {ministers: [], advisors: []}, 2: {ministers: [], advisors: []}, 3: {ministers: [], advisors: []}, 4: {ministers: [], advisors: []}, 5: {ministers: [], advisors: []} };
     schedulerData.playerAssignments = {};
     filtered.forEach(player => {
         const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
         schedulerData.playerAssignments[playerId] = { ministerAssigned: false, advisorAssigned: false };
     });
-    schedulerData.waitingList = [];
+    const tempWaitingList = [];
 
-    // Schedule minister for days 1,2,5, trying days sequentially per player
-    const ministerDays = [1, 2, 5];
-    for (const player of ministerList) {
+    // Construction buff assignment
+    const constructionList = filtered.filter(player => player[CONSTRUCTION] >= minHours).sort((a, b) => b[CONSTRUCTION] - a[CONSTRUCTION]);
+    for (const player of constructionList) {
         const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
         if (schedulerData.playerAssignments[playerId].ministerAssigned) {
             continue;
         }
-        if (player[CONSTRUCTION] + player[RESEARCH] < minHours) {
-            continue;
-        }
-        let assigned = false;
-        for (const day of ministerDays) {
-            const taken = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
-            const slots = generateTimeSlots();
-            for (const slot of slots) {
-                if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
-                    schedulerData.assignments[day].ministers.push({
-                        start: slot.start,
-                        end: slot.end,
-                        alliance: player[ALLIANCE],
-                        player: player[PLAYER],
-                        speedups: `${Math.round(player[CONSTRUCTION])} / ${Math.round(player[RESEARCH])}`,
-                        truegold: player[TRUEGOLD_PIECES]
-                    });
-                    schedulerData.playerAssignments[playerId].advisorAssigned = true; // Counts as advisor assignment
-                    assignmentsMade.push({ day: day, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
-                    assigned = true;
-                    break;
-                }
-            }
-            if (assigned) {
+        const taken = new Set(schedulerData.assignments[constructDay].ministers.map(a => a.start));
+        const slots = generateTimeSlots();
+        for (const slot of slots) {
+            if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
+                schedulerData.assignments[constructDay].ministers.push({
+                    start: slot.start,
+                    end: slot.end,
+                    alliance: player[ALLIANCE],
+                    player: player[PLAYER],
+                    speedups: `${Math.round(player[CONSTRUCTION])}`,
+                    truegold: player[TRUEGOLD_PIECES]
+                });
+                taken.add(slot.start);
+                schedulerData.playerAssignments[playerId].ministerAssigned = true;
                 break;
             }
         }
-        if (!assigned) {
-            schedulerData.waitingList.push({
-                alliance: player[ALLIANCE],
-                player: player[PLAYER],
-                speedups: {
-                    soldier: Math.round(player[SOLDIER_TRAINING]),
-                    construction: Math.round(player[CONSTRUCTION]),
-                    research: Math.round(player[RESEARCH])
-                },
-                truegold: Math.round(player[TRUEGOLD_PIECES]),
-                timeSlots: player.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ') || 'No available ranges'
-            });
+    }
+    tempWaitingList.push(...constructionList.filter(player => !schedulerData.playerAssignments[`${player[PLAYER]}-${player[ALLIANCE]}`].ministerAssigned).map(player => ({
+        alliance: player[ALLIANCE],
+        player: player[PLAYER],
+        speedups: {
+            soldier: Math.round(player[SOLDIER_TRAINING]),
+            construction: Math.round(player[CONSTRUCTION]),
+            research: Math.round(player[RESEARCH])
+        },
+        truegold: Math.round(player[TRUEGOLD_PIECES]),
+        timeSlots: player.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ') || 'No available ranges'
+    })));
+
+    // Research buff assignment
+    const researchList = filtered.filter(player => player[RESEARCH] >= minHours).sort((a, b) => b[RESEARCH] - a[RESEARCH]);
+    for (const player of researchList) {
+        const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
+        if (schedulerData.playerAssignments[playerId].ministerAssigned) {
+            continue;
+        }
+        const taken = new Set(schedulerData.assignments[researchDay].ministers.map(a => a.start));
+        const slots = generateTimeSlots();
+        for (const slot of slots) {
+            if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
+                schedulerData.assignments[researchDay].ministers.push({
+                    start: slot.start,
+                    end: slot.end,
+                    alliance: player[ALLIANCE],
+                    player: player[PLAYER],
+                    speedups: `${Math.round(player[RESEARCH])}`,
+                    truegold: player[TRUEGOLD_PIECES]
+                });
+                taken.add(slot.start);
+                schedulerData.playerAssignments[playerId].ministerAssigned = true;
+                break;
+            }
+        }
+    }
+    tempWaitingList.push(...researchList.filter(player => !schedulerData.playerAssignments[`${player[PLAYER]}-${player[ALLIANCE]}`].ministerAssigned).map(player => ({
+        alliance: player[ALLIANCE],
+        player: player[PLAYER],
+        speedups: {
+            soldier: Math.round(player[SOLDIER_TRAINING]),
+            construction: Math.round(player[CONSTRUCTION]),
+            research: Math.round(player[RESEARCH])
+        },
+        truegold: Math.round(player[TRUEGOLD_PIECES]),
+        timeSlots: player.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ') || 'No available ranges'
+    })));
+
+    // Advisor assignment for Day 4 with vector tempWaitingList vector
+    const advisorList = createAdvisorList(filtered.filter(player => player[SOLDIER_TRAINING] >= minHours));
+    scheduleNobleAdvisors(advisorList, minHours, schedulerData.playerAssignments, schedulerData.assignments, tempWaitingList, 4);
+
+    // Consolidate waiting list
+    const consolidatedWaitingList = [];
+    const seenPlayers = new Map();
+    tempWaitingList.forEach(waitingPlayer => {
+        const key = `${waitingPlayer.alliance}/${waitingPlayer.player}`;
+        if (!seenPlayers.has(key)) {
+            seenPlayers.set(key, waitingPlayer);
+        }
+    });
+    consolidatedWaitingList.push(...seenPlayers.values());
+
+    // Assign consolidated WL to open CM slots on days 1,2,5
+    for (const waitingPlayer of consolidatedWaitingList.slice()) {
+        const playerId = `${waitingPlayer.player}-${waitingPlayer.alliance}`;
+        if (schedulerData.playerAssignments[playerId]?.ministerAssigned) {
+            consolidatedWaitingList.splice(consolidatedWaitingList.indexOf(waitingPlayer), 1);
+            continue;
+        }
+        const daysToTry = [1, 2, 5];
+        for (const day of daysToTry) {
+            const taken = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
+            const slots = generateTimeSlots();
+            const player = filtered.find(p => p[PLAYER] === waitingPlayer.player && p[ALLIANCE] === waitingPlayer.alliance);
+            for (const slot of slots) {
+                if (!taken.has(slot.start) && player && isSlotAvailable(player, slot.start, slot.end)) {
+                    schedulerData.assignments[day].ministers.push({
+                        start: slot.start,
+                        end: slot.end,
+                        alliance: waitingPlayer.alliance,
+                        player: waitingPlayer.player,
+                        speedups: `${Math.round(waitingPlayer.speedups.construction)} / ${Math.round(waitingPlayer.speedups.research)}`,
+                        truegold: waitingPlayer.truegold
+                    });
+                    schedulerData.playerAssignments[playerId].ministerAssigned = true;
+                    consolidatedWaitingList.splice(consolidatedWaitingList.indexOf(waitingPlayer), 1);
+                    break;
+                }
+            }
+            if (schedulerData.playerAssignments[playerId]?.ministerAssigned) {
+                break;
+            }
         }
     }
 
-    // Schedule advisor for day 4
-    scheduleNobleAdvisors(advisorList, minHours, schedulerData.playerAssignments, schedulerData.assignments, schedulerData.waitingList, 4);
+    // Assign remaining WL to days 3 and 4 (CM-only)
+    for (const waitingPlayer of consolidatedWaitingList.slice()) {
+        const playerId = `${waitingPlayer.player}-${waitingPlayer.alliance}`;
+        if (schedulerData.playerAssignments[playerId]?.ministerAssigned) {
+            consolidatedWaitingList.splice(consolidatedWaitingList.indexOf(waitingPlayer), 1);
+            continue;
+        }
+        const daysToTry = [3, 4];
+        for (const day of daysToTry) {
+            const taken = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
+            const slots = generateTimeSlots();
+            const player = filtered.find(p => p[PLAYER] === waitingPlayer.player && p[ALLIANCE] === waitingPlayer.alliance);
+            for (const slot of slots) {
+                if (!taken.has(slot.start) && player && isSlotAvailable(player, slot.start, slot.end)) {
+                    schedulerData.assignments[day].ministers.push({
+                        start: slot.start,
+                        end: slot.end,
+                        alliance: waitingPlayer.alliance,
+                        player: waitingPlayer.player,
+                        speedups: `${Math.round(waitingPlayer.speedups.construction)} / ${Math.round(waitingPlayer.speedups.research)}`,
+                        truegold: waitingPlayer.truegold
+                    });
+                    schedulerData.playerAssignments[playerId].ministerAssigned = true;
+                    consolidatedWaitingList.splice(consolidatedWaitingList.indexOf(waitingPlayer), 1);
+                    break;
+                }
+            }
+            if (schedulerData.playerAssignments[playerId]?.ministerAssigned) {
+                break;
+            }
+        }
+    }
+
+    // Set global waiting list
+    schedulerData.waitingList = consolidatedWaitingList;
 }
 
 /**
@@ -792,8 +903,8 @@ function renderUI(data, scrollToTop = false) {
  * @param {Array<PlayerObject>} players - Array of player objects from CSV.
  * @param {number} minHours - Minimum hours required for construction+research or training.
  */
-async function processAndSchedule(players, minHours) {
-    calculateScheduleData(players, minHours);
+async function processAndSchedule(players) {
+    calculateScheduleData(players);
     try {
         await saveSchedulerData(schedulerData);
     } catch (e) {
@@ -812,13 +923,26 @@ async function processAndSchedule(players, minHours) {
 function loadSchedulerSystem(data) {
     // Update global state
     Object.assign(schedulerData, data);
-    
-    // Update Min Hours input
+
+    // Set defaults for new fields
+    schedulerData.constructionKingDay = schedulerData.constructionKingDay ?? 1;
+    schedulerData.researchKingDay = schedulerData.researchKingDay ?? 2;
+    schedulerData.assignments[3] = schedulerData.assignments[3] ?? { ministers: [], advisors: [] };
+
+    // Update UI inputs
     const minHoursInput = document.getElementById('minHoursInput');
     if (minHoursInput) {
         minHoursInput.value = data.minHours || 20;
     }
-    
+    const constructionDayInput = document.getElementById('constructionKingDay');
+    if (constructionDayInput) {
+        constructionDayInput.value = schedulerData.constructionKingDay;
+    }
+    const researchDayInput = document.getElementById('researchKingDay');
+    if (researchDayInput) {
+        researchDayInput.value = schedulerData.researchKingDay;
+    }
+
     // Render the UI
     renderUI(schedulerData);
     console.log(`Loaded scheduler data created at ${new Date(data.creationTimeMS).toLocaleString()}`);
@@ -904,9 +1028,8 @@ document.addEventListener('DOMContentLoaded', () => {
             reader.onload = function(e) {
                 const csvText = e.target.result;
                 const players = parseCsvToObjects(csvText);
-                const minHours = parseInt(document.getElementById('minHoursInput').value) || 20;
                 // Process and schedule
-                processAndSchedule(players, minHours);
+                processAndSchedule(players);
             };
             reader.readAsText(file);
         }
@@ -1022,74 +1145,154 @@ function submitAddPlayer() {
     // 3. Schedule Logic (Incremental)
     /** @type {Array<{day: number, role: string, slotStr: string}>} */
     const assignmentsMade = [];
-    
-    // Attempt Minister (Days 1, 2, 5)
-    if (isMinisterQualified) {
-        const ministerDays = [1, 2, 5];
-        for (const day of ministerDays) {
-            const taken = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
-            const slots = generateTimeSlots();
-            let assigned = false;
-            
-            for (const slot of slots) {
-                // @ts-ignore
-                if (!taken.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
-                    // console.log(`Assigning Minister for ${newPlayer[PLAYER]} on Day ${day} at ${slot.start}-${slot.end}`, newPlayer,taken);
-                    schedulerData.assignments[day].ministers.push({
-                        start: slot.start,
-                        end: slot.end,
-                        // @ts-ignore
-                        alliance: newPlayer[ALLIANCE],
-                        // @ts-ignore
-                        player: newPlayer[PLAYER],
-                        // @ts-ignore
-                        speedups: `${Math.round(newPlayer[CONSTRUCTION])} / ${Math.round(newPlayer[RESEARCH])}`,
-                        // @ts-ignore
-                        truegold: newPlayer[TRUEGOLD_PIECES]
-                    });
-                    schedulerData.playerAssignments[playerId].ministerAssigned = true;
-                    assignmentsMade.push({ day: day, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
-                    assigned = true;
-                    break;
-                }
+
+    // Attempt Construction buff
+    if (player[CONSTRUCTION] >= minHours && !schedulerData.playerAssignments[playerId].ministerAssigned) {
+        const constructDay = parseInt(document.getElementById('constructionKingDay').value) || 1;
+        const taken = new Set(schedulerData.assignments[constructDay].ministers.map(a => a.start));
+        const slots = generateTimeSlots();
+        for (const slot of slots) {
+            // @ts-ignore
+            if (!taken.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
+                schedulerData.assignments[constructDay].ministers.push({
+                    start: slot.start,
+                    end: slot.end,
+                    // @ts-ignore
+                    alliance: newPlayer[ALLIANCE],
+                    // @ts-ignore
+                    player: newPlayer[PLAYER],
+                    // @ts-ignore
+                    speedups: `${Math.round(newPlayer[CONSTRUCTION])}`,
+                    // @ts-ignore
+                    truegold: newPlayer[TRUEGOLD_PIECES]
+                });
+                schedulerData.playerAssignments[playerId].ministerAssigned = true;
+                assignmentsMade.push({ day: constructDay, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
+                break;
             }
-            if (assigned) break; // One slot max for Minister
+        }
+        // Fallback to other days in 1,2,5
+        if (!schedulerData.playerAssignments[playerId].ministerAssigned) {
+            const fallbackDays = [1, 2, 5].filter(d => d !== constructDay);
+            for (const day of fallbackDays) {
+                const takenFallback = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
+                for (const slot of slots) {
+                    // @ts-ignore
+                    if (!takenFallback.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
+                        schedulerData.assignments[day].ministers.push({
+                            start: slot.start,
+                            end: slot.end,
+                            // @ts-ignore
+                            alliance: newPlayer[ALLIANCE],
+                            // @ts-ignore
+                            player: newPlayer[PLAYER],
+                            // @ts-ignore
+                            speedups: `${Math.round(newPlayer[CONSTRUCTION])}`,
+                            // @ts-ignore
+                            truegold: newPlayer[TRUEGOLD_PIECES]
+                        });
+                        schedulerData.playerAssignments[playerId].ministerAssigned = true;
+                        assignmentsMade.push({ day: day, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
+                        break;
+                    }
+                }
+                if (schedulerData.playerAssignments[playerId].ministerAssigned) break;
+            }
         }
     }
-    
+
+    // Attempt Research buff
+    if (player[RESEARCH] >= minHours && !schedulerData.playerAssignments[playerId].ministerAssigned) {
+        const researchDay = parseInt(document.getElementById('researchKingDay').value) || 2;
+        const taken = new Set(schedulerData.assignments[researchDay].ministers.map(a => a.start));
+        const slots = generateTimeSlots();
+        for (const slot of slots) {
+            // @ts-ignore
+            if (!taken.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
+                schedulerData.assignments[researchDay].ministers.push({
+                    start: slot.start,
+                    end: slot.end,
+                    // @ts-ignore
+                    alliance: newPlayer[ALLIANCE],
+                    // @ts-ignore
+                    player: newPlayer[PLAYER],
+                    // @ts-ignore
+                    speedups: `${Math.round(newPlayer[RESEARCH])}`,
+                    // @ts-ignore
+                    truegold: newPlayer[TRUEGOLD_PIECES]
+                });
+                schedulerData.playerAssignments[playerId].ministerAssigned = true;
+                assignmentsMade.push({ day: researchDay, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
+                break;
+            }
+        }
+        // Fallback to other days in 1,2,5
+        if (!schedulerData.playerAssignments[playerId].ministerAssigned) {
+            const fallbackDays = [1, 2, 5].filter(d => d !== researchDay);
+            for (const day of fallbackDays) {
+                const takenFallback = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
+                for (const slot of slots) {
+                    // @ts-ignore
+                    if (!takenFallback.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
+                        schedulerData.assignments[day].ministers.push({
+                            start: slot.start,
+                            end: slot.end,
+                            // @ts-ignore
+                            alliance: newPlayer[ALLIANCE],
+                            // @ts-ignore
+                            player: newPlayer[PLAYER],
+                            // @ts-ignore
+                            speedups: `${Math.round(newPlayer[RESEARCH])}`,
+                            // @ts-ignore
+                            truegold: newPlayer[TRUEGOLD_PIECES]
+                        });
+                        schedulerData.playerAssignments[playerId].ministerAssigned = true;
+                        assignmentsMade.push({ day: day, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
+                        break;
+                    }
+                }
+                if (schedulerData.playerAssignments[playerId].ministerAssigned) break;
+            }
+        }
+    }
+
     // Attempt Advisor (Day 4)
-    if (isAdvisorQualified) {
+    if (player[SOLDIER_TRAINING] >= minHours && !schedulerData.playerAssignments[playerId].advisorAssigned) {
         const day = 4;
         const advisorSlots = generateTimeSlots();
         const ministerSlots = generateTimeSlots(); // For overflow
         const takenAdvisor = new Set(schedulerData.assignments[day].advisors.map(a => a.start));
         const takenMinister = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
         let assigned = false;
-        
+
         // Try standard Advisor slot
         for (const slot of advisorSlots) {
-             // @ts-ignore
-             if (!takenAdvisor.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
+              // @ts-ignore
+              if (!takenAdvisor.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
                 schedulerData.assignments[day].advisors.push({
                     start: slot.start,
                     end: slot.end,
-                    alliance: player[ALLIANCE],
-                    player: player[PLAYER],
-                    speedups: Math.round(player[SOLDIER_TRAINING]),
-                    truegold: player[TRUEGOLD_PIECES]
+                    // @ts-ignore
+                    alliance: newPlayer[ALLIANCE],
+                    // @ts-ignore
+                    player: newPlayer[PLAYER],
+                    // @ts-ignore
+                    speedups: Math.round(newPlayer[SOLDIER_TRAINING]),
+                    // @ts-ignore
+                    truegold: newPlayer[TRUEGOLD_PIECES]
                 });
                 schedulerData.playerAssignments[playerId].advisorAssigned = true;
                 assignmentsMade.push({ day: day, role: 'advisors', slotStr: `${slot.start}-${slot.end}` });
                 assigned = true;
                 break;
-             }
+              }
         }
-        
-        // Overflow to Chief Minister if needed
-        if (!assigned) {
-             for (const slot of ministerSlots) {
-                 // @ts-ignore
-                 if (!takenMinister.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
+
+        // Overflow to Chief Minister if needed and not already ministerAssigned
+        if (!assigned && !schedulerData.playerAssignments[playerId].ministerAssigned) {
+              for (const slot of ministerSlots) {
+                  // @ts-ignore
+                  if (!takenMinister.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
                     schedulerData.assignments[day].ministers.push({
                         start: slot.start,
                         end: slot.end,
@@ -1102,12 +1305,13 @@ function submitAddPlayer() {
                         // @ts-ignore
                         truegold: newPlayer[TRUEGOLD_PIECES]
                     });
-                     schedulerData.playerAssignments[playerId].advisorAssigned = true; // Counts as advisor
-                     assignmentsMade.push({ day: 4, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
-                     assigned = true;
-                     break;
-                 }
-             }
+                      schedulerData.playerAssignments[playerId].advisorAssigned = true; // Counts as advisor
+                      schedulerData.playerAssignments[playerId].ministerAssigned = true; // Prevent double CM globally
+                      assignmentsMade.push({ day: 4, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
+                      assigned = true;
+                      break;
+                  }
+              }
         }
     }
     
@@ -1145,9 +1349,9 @@ function submitAddPlayer() {
  * Common finish steps for management actions: save, render, notify, close modals.
  * @param {string} message - Notification message.
  */
-async function finishManagementAction(message) {
+    async function finishManagementAction(message) {
     // Sort assignments before rendering
-    [1, 2, 4, 5].forEach(day => {
+    [1, 2, 3, 4, 5].forEach(day => {
         schedulerData.assignments[day].ministers.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
         schedulerData.assignments[day].advisors.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
     });
@@ -1209,7 +1413,7 @@ function submitRemoveUser() {
     schedulerData.waitingList = schedulerData.waitingList.filter(p => `${p.player}-${p.alliance}` !== idToRemove);
     
     // 2. Remove from assignments
-    [1, 2, 4, 5].forEach(day => {
+    [1, 2, 3, 4, 5].forEach(day => {
         schedulerData.assignments[day].ministers = schedulerData.assignments[day].ministers.filter(a => `${a.player}-${a.alliance}` !== idToRemove);
         schedulerData.assignments[day].advisors = schedulerData.assignments[day].advisors.filter(a => `${a.player}-${a.alliance}` !== idToRemove);
     });
