@@ -564,7 +564,7 @@ function populateWaitingList(waiting) {
         waiting.forEach(player => {
             const li = document.createElement('li');
             li.className = 'mb-2';
-            li.textContent = `${player.alliance}/${player.player} - Speedups: S:${player.speedups.soldier} C:${player.speedups.construction} R:${player.speedups.research} - TrueGold: ${player.truegold} - Time Slots: ${player.timeSlots} `;
+            li.textContent = `${player.alliance}/${player.player} - Speedups: T:${player.speedups.soldier} C:${player.speedups.construction} R:${player.speedups.research} - TrueGold: ${player.truegold} - Time Slots: ${player.timeSlots} `;
             
             // Assign Button
             const assignBtn = document.createElement('button');
@@ -591,7 +591,7 @@ function updateFilteredList(filteredOut) {
             const li = document.createElement('li');
             li.className = 'mb-2';
             // @ts-ignore
-            li.textContent = `${player[ALLIANCE]}/${player[PLAYER]} - Speedups: S:${Math.round(player[SOLDIER_TRAINING])} C:${Math.round(player[CONSTRUCTION])} R:${Math.round(player[RESEARCH])} - TrueGold: ${Math.round(player[TRUEGOLD_PIECES])} `;
+            li.textContent = `${player[ALLIANCE]}/${player[PLAYER]} - Speedups: T:${Math.round(player[SOLDIER_TRAINING])} C:${Math.round(player[CONSTRUCTION])} R:${Math.round(player[RESEARCH])} - TrueGold: ${Math.round(player[TRUEGOLD_PIECES])} `;
             
             // Assign Button
             const assignBtn = document.createElement('button');
