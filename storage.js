@@ -17,6 +17,11 @@ async function saveSchedulerData(data) {
         return;
     }
 
+    if (!navigator.storage || !navigator.storage.getDirectory) {
+        console.warn('OPFS not supported in this browser/environment. Data will not be saved persistently.');
+        return;
+    }
+
     try {
         const root = await navigator.storage.getDirectory();
         const filename = `${FILE_PREFIX}${data.creationTimeMS}${FILE_EXTENSION}`;
@@ -26,8 +31,12 @@ async function saveSchedulerData(data) {
         await writable.close();
         console.log(`Saved scheduler data to ${filename}`);
     } catch (error) {
-        console.error('Error saving scheduler data:', error);
-        throw error;
+        if (error.name === 'SecurityError') {
+            console.warn('OPFS access blocked (SecurityError). Data will not be saved persistently.');
+        } else {
+            console.error('Error saving scheduler data:', error);
+            throw error;
+        }
     }
 }
 
@@ -36,6 +45,10 @@ async function saveSchedulerData(data) {
  * @returns {Promise<Array<{name: string, timestamp: number}>>} List of files sorted by timestamp descending (newest first).
  */
 async function listSchedulerDataFiles() {
+    if (!navigator.storage || !navigator.storage.getDirectory) {
+        return [];
+    }
+
     try {
         const root = await navigator.storage.getDirectory();
         const files = [];
@@ -59,7 +72,11 @@ async function listSchedulerDataFiles() {
         // Sort by timestamp descending
         return files.sort((a, b) => b.timestamp - a.timestamp);
     } catch (error) {
-        console.error('Error listing scheduler data files:', error);
+        if (error.name === 'SecurityError') {
+            console.warn('OPFS access blocked (SecurityError). Cannot list scheduler files.');
+        } else {
+            console.error('Error listing scheduler data files:', error);
+        }
         return [];
     }
 }
@@ -70,6 +87,10 @@ async function listSchedulerDataFiles() {
  * @returns {Promise<SchedulerData|null>} The loaded data or null if not found.
  */
 async function getSchedulerDataByName(filename) {
+    if (!navigator.storage || !navigator.storage.getDirectory) {
+        return null;
+    }
+
     try {
         const root = await navigator.storage.getDirectory();
         const fileHandle = await root.getFileHandle(filename);
@@ -77,7 +98,11 @@ async function getSchedulerDataByName(filename) {
         const text = await file.text();
         return JSON.parse(text);
     } catch (error) {
-        console.error(`Error loading file ${filename}:`, error);
+        if (error.name === 'SecurityError') {
+            console.warn(`OPFS access blocked (SecurityError). Cannot load file ${filename}.`);
+        } else {
+            console.error(`Error loading file ${filename}:`, error);
+        }
         return null;
     }
 }

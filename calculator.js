@@ -739,3 +739,121 @@ document.getElementById('csvFileInput').addEventListener('change', function(even
         reader.readAsText(file);
     }
 });
+
+/**
+ * Loads the scheduler system with the provided data.
+ * Populates the internal state and updates the UI.
+ * @param {SchedulerData} data - The scheduler data to load.
+ */
+function loadSchedulerSystem(data) {
+    // Update global state
+    Object.assign(schedulerData, data);
+    
+    // Update Min Hours input
+    const minHoursInput = document.getElementById('minHoursInput');
+    if (minHoursInput) {
+        minHoursInput.value = data.minHours || 20;
+    }
+    
+    // Render the UI
+    renderUI(schedulerData);
+    console.log(`Loaded scheduler data created at ${new Date(data.creationTimeMS).toLocaleString()}`);
+}
+
+/**
+ * Checks for and loads the most recent scheduler data from storage if it is less than 5 days old.
+ */
+async function loadRecentData() {
+    try {
+        const recentData = await getMostRecentSchedulerData();
+        if (recentData) {
+            const fiveDaysInMs = 5 * 24 * 60 * 60 * 1000;
+            const age = Date.now() - recentData.creationTimeMS;
+            
+            if (age < fiveDaysInMs) {
+                console.log('Found recent data, loading...');
+                loadSchedulerSystem(recentData);
+            } else {
+                console.log('Recent data found but it is older than 5 days. Ignoring.');
+            }
+        }
+    } catch (error) {
+        // Silently fail as requested
+        console.warn('Failed to load recent data:', error);
+    }
+}
+
+/**
+ * Exports the current scheduler data to a JSON file.
+ */
+function exportSchedulerData() {
+    if (!schedulerData.creationTimeMS) {
+        alert('No data to export. Please process a CSV file first.');
+        return;
+    }
+    
+    const dataStr = JSON.stringify(schedulerData, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `scheduler_data_${schedulerData.creationTimeMS}.json`;
+    document.body.appendChild(a);
+    a.click();
+    
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+/**
+ * Validates if the object has the required SchedulerData fields.
+ * @param {Object} data - The object to check.
+ * @returns {boolean} True if valid.
+ */
+function isValidSchedulerData(data) {
+    const requiredFields = ['rawPlayers', 'processedPlayers', 'assignments', 'minHours', 'creationTimeMS'];
+    return requiredFields.every(field => Object.prototype.hasOwnProperty.call(data, field));
+}
+
+// Event Listeners for Import/Export
+
+document.getElementById('exportBtn').addEventListener('click', exportSchedulerData);
+
+const importBtn = document.getElementById('importBtn');
+const jsonFileInput = document.getElementById('jsonFileInput');
+
+importBtn.addEventListener('click', function() {
+    jsonFileInput.click();
+});
+
+jsonFileInput.addEventListener('change', function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        try {
+            const text = e.target.result;
+            const data = JSON.parse(text);
+            
+            if (isValidSchedulerData(data)) {
+                loadSchedulerSystem(data);
+                // Save to OPFS
+                await saveSchedulerData(data);
+            } else {
+                alert('Invalid scheduler data file. Missing required fields.');
+            }
+        } catch (error) {
+            console.error('Error importing file:', error);
+            alert('Error parsing JSON file.');
+        } finally {
+            // Reset input so same file can be selected again if needed
+            jsonFileInput.value = '';
+        }
+    };
+    reader.readAsText(file);
+});
+
+// Auto-load on startup
+document.addEventListener('DOMContentLoaded', loadRecentData);
