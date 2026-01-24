@@ -1449,6 +1449,88 @@ function openAssignmentModal(alliance, player, existing = null) {
 }
 
 /**
+ * Opens the messages modal for a given day and role.
+ * @param {number} day - Day number (1-5)
+ * @param {string} role - 'ministers' or 'advisors'
+ */
+function openMessagesModal(day, role) {
+    const titleText = `Day ${day} ${role === 'ministers' ? 'Chief Minister' : 'Noble Advisor'} Messages`;
+    document.getElementById('messagesModalTitle').textContent = titleText;
+
+    const content = document.getElementById('messagesContent');
+    content.innerHTML = '';
+
+    const assignments = schedulerData.assignments[day][role];
+    if (assignments.length === 0) {
+        content.innerHTML = '<p>No assignments to display.</p>';
+        // @ts-ignore
+        new bootstrap.Modal(document.getElementById('messagesModal')).show();
+        return;
+    }
+
+    // Build list of "Alliance/Player" strings
+    const lines = assignments.map(app => `${app.start} ${app.alliance}/${app.player}`);
+
+    // Group into blocks <500 chars
+    const blocks = [];
+    let currentBlock = '';
+    lines.forEach(line => {
+        const lineWithNewline = line + '\n';
+        const newLength = currentBlock.length + lineWithNewline.length;
+        if (newLength > 499) {
+            if (currentBlock.length > 0) {
+                blocks.push(currentBlock.trimEnd()); // trim trailing newline
+                currentBlock = lineWithNewline;
+            } else {
+                // First line in new block
+                currentBlock = lineWithNewline;
+            }
+        } else {
+            currentBlock += lineWithNewline;
+        }
+    });
+    if (currentBlock.length > 0) {
+        blocks.push(currentBlock.trimEnd());
+    }
+
+    // Create divs for each block
+    blocks.forEach(block => {
+        const blockDiv = document.createElement('div');
+        blockDiv.className = 'border p-3 mb-3';
+        const rowDiv = document.createElement('div');
+        rowDiv.className = 'row';
+        const preCol = document.createElement('div');
+        preCol.className = 'col';
+        const pre = document.createElement('pre');
+        pre.textContent = block.replace(/\n/g, '\n'); // Ensure newlines
+        preCol.appendChild(pre);
+        const btnCol = document.createElement('div');
+        btnCol.className = 'col-auto text-end d-flex align-items-start';
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'btn btn-sm';
+        copyBtn.innerHTML = '📋';
+        copyBtn.onclick = () => copyToClipboard(block);
+        btnCol.appendChild(copyBtn);
+        rowDiv.appendChild(preCol);
+        rowDiv.appendChild(btnCol);
+        blockDiv.appendChild(rowDiv);
+        content.appendChild(blockDiv);
+    });
+
+    // @ts-ignore
+    new bootstrap.Modal(document.getElementById('messagesModal')).show();
+}
+
+/**
+ * Copies the provided encoded text to clipboard.
+ * @param {string} encodedText - Base64 encoded text
+ */
+function copyToClipboard(encodedText) {
+    const text = encodedText;
+    navigator.clipboard.writeText(text).catch(e => alert('Copy failed: ' + e.message));
+}
+
+/**
  * Updates the list of available slots in the modal based on selected day/role.
  */
 function updateAssignmentSlots() {

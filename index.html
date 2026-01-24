@@ -145,15 +145,18 @@
 
       <div class="day-section" id="day1Section" style="display: none;">
            <div id="day1HeadingWrapper" style="padding-top: 20px;">
-               <div class="row mb-2">
-                   <div class="col">
-                       <h2>Day 1 Appointments (Chief Minister)</h2>
-                   </div>
-                   <div class="col text-end">
-                       <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay1Minister" onclick="toggleTable('day1MinisterTable')">Collapse</button>
-                   </div>
-               </div>
-           </div>
+                <div class="row mb-2">
+                    <div class="col">
+                        <h2>Day 1 Appointments (Chief Minister)</h2>
+                    </div>
+                    <div class="col-auto">
+                        <button class="btn btn-sm btn-outline-primary" onclick="openMessagesModal(1, 'ministers')">Messages</button>
+                    </div>
+                    <div class="col text-end">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay1Minister" onclick="toggleTable('day1MinisterTable')">Collapse</button>
+                    </div>
+                </div>
+            </div>
            <table id="day1MinisterTable" class="table table-striped w-100">
                <thead>
                    <tr>
@@ -165,16 +168,19 @@
                </thead>
                <tbody></tbody>
            </table>
-          <div id="day1NobleSection">
-              <div class="row mb-2">
-                  <div class="col">
-                      <h3>Day 1 (Noble Advisor)</h3>
-                  </div>
-                  <div class="col text-end">
-                      <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay1Noble" onclick="toggleTable('day1NobleTable')">Collapse</button>
-                  </div>
-              </div>
-              <table id="day1NobleTable" class="table table-striped w-100">
+           <div id="day1NobleSection">
+               <div class="row mb-2">
+                   <div class="col">
+                       <h3>Day 1 (Noble Advisor)</h3>
+                   </div>
+                   <div class="col-auto">
+                       <button class="btn btn-sm btn-outline-primary" onclick="openMessagesModal(1, 'advisors')">Messages</button>
+                   </div>
+                   <div class="col text-end">
+                       <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay1Noble" onclick="toggleTable('day1NobleTable')">Collapse</button>
+                   </div>
+               </div>
+               <table id="day1NobleTable" class="table table-striped w-100">
                   <thead>
                       <tr>
                           <th>Appointment Time</th>
@@ -191,6 +197,9 @@
            <div class="row mb-2">
                <div class="col">
                    <h2>Day 2 Appointments (Chief Minister)</h2>
+               </div>
+               <div class="col-auto">
+                   <button class="btn btn-sm btn-outline-primary" onclick="openMessagesModal(2, 'ministers')">Messages</button>
                </div>
                <div class="col text-end">
                    <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay2Minister" onclick="toggleTable('day2MinisterTable')">Collapse</button>
@@ -211,6 +220,9 @@
               <div class="row mb-2">
                   <div class="col">
                       <h3>Day 2 (Noble Advisor)</h3>
+                  </div>
+                  <div class="col-auto">
+                      <button class="btn btn-sm btn-outline-primary" onclick="openMessagesModal(2, 'advisors')">Messages</button>
                   </div>
                   <div class="col text-end">
                       <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay2Noble" onclick="toggleTable('day2NobleTable')">Collapse</button>
@@ -234,6 +246,9 @@
                 <div class="col">
                     <h2>Day 3 Appointments (Chief Minister)</h2>
                 </div>
+                <div class="col-auto">
+                    <button class="btn btn-sm btn-outline-primary" onclick="openMessagesModal(3, 'ministers')">Messages</button>
+                </div>
                 <div class="col text-end">
                     <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay3Minister" onclick="toggleTable('day3MinisterTable')">Collapse</button>
                 </div>
@@ -256,6 +271,9 @@
               <div class="col">
                   <h2>Day 4 Appointments (Noble Advisor)</h2>
               </div>
+              <div class="col-auto">
+                  <button class="btn btn-sm btn-outline-primary" onclick="openMessagesModal(4, 'advisors')">Messages</button>
+              </div>
               <div class="col text-end">
                   <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay4Noble" onclick="toggleTable('day4NobleTable')">Collapse</button>
               </div>
@@ -274,6 +292,9 @@
               <div class="row mb-2">
                   <div class="col">
                       <h3>Day 4 (Chief Minister)</h3>
+                  </div>
+                  <div class="col-auto">
+                      <button class="btn btn-sm btn-outline-primary" onclick="openMessagesModal(4, 'ministers')">Messages</button>
                   </div>
                   <div class="col text-end">
                       <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay4Minister" onclick="toggleTable('day4MinisterTable')">Collapse</button>
@@ -298,6 +319,9 @@
                <div class="col">
                    <h2>Day 5 Appointments (Chief Minister)</h2>
                </div>
+               <div class="col-auto">
+                   <button class="btn btn-sm btn-outline-primary" onclick="openMessagesModal(5, 'ministers')">Messages</button>
+               </div>
                <div class="col text-end">
                    <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay5Minister" onclick="toggleTable('day5MinisterTable')">Collapse</button>
                </div>
@@ -317,6 +341,9 @@
               <div class="row mb-2">
                   <div class="col">
                       <h3>Day 5 (Noble Advisor)</h3>
+                  </div>
+                  <div class="col-auto">
+                      <button class="btn btn-sm btn-outline-primary" onclick="openMessagesModal(5, 'advisors')">Messages</button>
                   </div>
                   <div class="col text-end">
                       <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDay5Noble" onclick="toggleTable('day5NobleTable')">Collapse</button>
@@ -494,6 +521,21 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-danger" onclick="submitRemoveUser()">Remove User</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Messages Modal -->
+    <div class="modal fade" id="messagesModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="messagesModalTitle">Messages</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="messagesContent"></div>
                 </div>
             </div>
         </div>
