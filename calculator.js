@@ -1011,6 +1011,7 @@ function submitAddPlayer() {
             for (const slot of slots) {
                 // @ts-ignore
                 if (!taken.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
+                    // console.log(`Assigning Minister for ${newPlayer[PLAYER]} on Day ${day} at ${slot.start}-${slot.end}`, newPlayer,taken);
                     schedulerData.assignments[day].ministers.push({
                         start: slot.start,
                         end: slot.end,
@@ -1024,7 +1025,7 @@ function submitAddPlayer() {
                         truegold: newPlayer[TRUEGOLD_PIECES]
                     });
                     schedulerData.playerAssignments[playerId].ministerAssigned = true;
-                    assignmentsMade.push(`Day ${day} Minister (${slot.start}-${slot.end})`);
+                    assignmentsMade.push({ day: day, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
                     assigned = true;
                     break;
                 }
@@ -1078,10 +1079,10 @@ function submitAddPlayer() {
                         // @ts-ignore
                         truegold: newPlayer[TRUEGOLD_PIECES]
                     });
-                    schedulerData.playerAssignments[playerId].advisorAssigned = true; // Counts as advisor
-                    assignmentsMade.push(`Day 4 Minister (Overflow Advisor) (${slot.start}-${slot.end})`);
-                    assigned = true;
-                    break;
+                     schedulerData.playerAssignments[playerId].advisorAssigned = true; // Counts as advisor
+                     assignmentsMade.push({ day: 4, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
+                     assigned = true;
+                     break;
                  }
              }
         }
