@@ -77,7 +77,9 @@ const schedulerData = {
     assignments: { 1: {ministers: [], advisors: []}, 2: {ministers: [], advisors: []}, 3: {ministers: [], advisors: []}, 4: {ministers: [], advisors: []}, 5: {ministers: [], advisors: []} },
     waitingList: [],
     filteredOut: [],
-    playerAssignments: {},
+    constructionAssignments: {},
+    researchAssignments: {},
+    trainingAssignments: {},
     minHours: 20,
     creationTimeMS: 0,
     lastModifiedTimeMS: 0,
@@ -391,12 +393,12 @@ function isSlotAvailable(player, slotStart, slotEnd) {
  * Players are processed in order of highest to lowest soldier training hours.
  * @param {Array<PlayerObject>} playerList - List of players qualified for Noble Advisor (sorted by soldier training descending).
  * @param {number} minHours - Minimum soldier training hours required for Noble Advisor qualification.
- * @param {PlayerAssignments} playerAssignments - Object tracking each player's assignment status.
+ * @param {SchedulerData} schedulerData - The main scheduler data object containing assignment maps.
  * @param {Assignments} assignments - Object containing assignment arrays for each day and role.
  * @param {Array<WaitingPlayer>} waiting - Array to add players who cannot be assigned to either role.
  * @param {number} day - The day number (expected to be 4).
  */
-function scheduleNobleAdvisors(playerList, minHours, playerAssignments, assignments, waitingList, day) {
+function scheduleNobleAdvisors(playerList, minHours, schedulerData, assignments, waitingList, day) {
     // Sort players by training hours descending (highest first)
     playerList.sort((a, b) => b.soldierTraining - a.soldierTraining);
 
@@ -411,8 +413,8 @@ function scheduleNobleAdvisors(playerList, minHours, playerAssignments, assignme
     // Iterate through the sorted players
     for (const player of playerList) {
         const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
-        if (playerAssignments[playerId].advisorAssigned) {
-            continue; // Already assigned as advisor (including via overflow)
+        if (schedulerData.trainingAssignments[playerId]) {
+            continue; // Already assigned as advisor
         }
         // Check advisor qualification
         if (player[SOLDIER_TRAINING] < minHours) {
@@ -432,13 +434,13 @@ function scheduleNobleAdvisors(playerList, minHours, playerAssignments, assignme
                     truegold: player[TRUEGOLD_PIECES]
                 });
                 takenAdvisorSlots.add(slot.start);
-                playerAssignments[playerId].advisorAssigned = true;
+                schedulerData.trainingAssignments[playerId] = true;
                 assigned = true;
                 break;
             }
         }
 
-        // Attempt Chief Minister overflow
+        // Attempt Chief Minister overflow (sets research flag per requirements)
         if (!assigned) {
             for (const slot of ministerSlots) {
                 if (!takenMinisterSlots.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
@@ -451,7 +453,7 @@ function scheduleNobleAdvisors(playerList, minHours, playerAssignments, assignme
                         truegold: player[TRUEGOLD_PIECES]
                     });
                     takenMinisterSlots.add(slot.start);
-                    playerAssignments[playerId].advisorAssigned = true; // Counts as advisor assignment
+                    schedulerData.researchAssignments[playerId] = true; // Sets research assignment only
                     assigned = true;
                     break;
                 }
@@ -721,10 +723,18 @@ function calculateScheduleData(players) {
 
     // Initialize assignments and tracking
     schedulerData.assignments = { 1: {ministers: [], advisors: []}, 2: {ministers: [], advisors: []}, 3: {ministers: [], advisors: []}, 4: {ministers: [], advisors: []}, 5: {ministers: [], advisors: []} };
-    schedulerData.playerAssignments = {};
+    schedulerData.constructionAssignments = {};
+    schedulerData.researchAssignments = {};
+    schedulerData.trainingAssignments = {};
     filtered.forEach(player => {
         const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
-        schedulerData.playerAssignments[playerId] = { ministerAssigned: false, advisorAssigned: false };
+        if (player[CONSTRUCTION] + player[RESEARCH] >= minHours) {
+            schedulerData.constructionAssignments[playerId] = false;
+            schedulerData.researchAssignments[playerId] = false;
+        }
+        if (player[SOLDIER_TRAINING] >= minHours) {
+            schedulerData.trainingAssignments[playerId] = false;
+        }
     });
     const tempWaitingList = [];
 
@@ -732,7 +742,7 @@ function calculateScheduleData(players) {
     const constructionList = filtered.filter(player => player[CONSTRUCTION] >= minHours).sort((a, b) => b[CONSTRUCTION] - a[CONSTRUCTION]);
     for (const player of constructionList) {
         const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
-        if (schedulerData.playerAssignments[playerId].ministerAssigned) {
+        if (schedulerData.constructionAssignments[playerId]) {
             continue;
         }
         const taken = new Set(schedulerData.assignments[constructDay].ministers.map(a => a.start));
@@ -748,12 +758,12 @@ function calculateScheduleData(players) {
                     truegold: player[TRUEGOLD_PIECES]
                 });
                 taken.add(slot.start);
-                schedulerData.playerAssignments[playerId].ministerAssigned = true;
+                schedulerData.constructionAssignments[playerId] = true;
                 break;
             }
         }
     }
-    tempWaitingList.push(...constructionList.filter(player => !schedulerData.playerAssignments[`${player[PLAYER]}-${player[ALLIANCE]}`].ministerAssigned).map(player => ({
+    tempWaitingList.push(...constructionList.filter(player => !schedulerData.constructionAssignments[`${player[PLAYER]}-${player[ALLIANCE]}`]).map(player => ({
         alliance: player[ALLIANCE],
         player: player[PLAYER],
         speedups: {
@@ -769,7 +779,7 @@ function calculateScheduleData(players) {
     const researchList = filtered.filter(player => player[RESEARCH] >= minHours).sort((a, b) => b[RESEARCH] - a[RESEARCH]);
     for (const player of researchList) {
         const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
-        if (schedulerData.playerAssignments[playerId].ministerAssigned) {
+        if (schedulerData.researchAssignments[playerId]) {
             continue;
         }
         const taken = new Set(schedulerData.assignments[researchDay].ministers.map(a => a.start));
@@ -785,12 +795,12 @@ function calculateScheduleData(players) {
                     truegold: player[TRUEGOLD_PIECES]
                 });
                 taken.add(slot.start);
-                schedulerData.playerAssignments[playerId].ministerAssigned = true;
+                schedulerData.researchAssignments[playerId] = true;
                 break;
             }
         }
     }
-    tempWaitingList.push(...researchList.filter(player => !schedulerData.playerAssignments[`${player[PLAYER]}-${player[ALLIANCE]}`].ministerAssigned).map(player => ({
+    tempWaitingList.push(...researchList.filter(player => !schedulerData.researchAssignments[`${player[PLAYER]}-${player[ALLIANCE]}`]).map(player => ({
         alliance: player[ALLIANCE],
         player: player[PLAYER],
         speedups: {
@@ -804,7 +814,7 @@ function calculateScheduleData(players) {
 
     // Advisor assignment for Day 4 with vector tempWaitingList vector
     const advisorList = createAdvisorList(filtered.filter(player => player[SOLDIER_TRAINING] >= minHours));
-    scheduleNobleAdvisors(advisorList, minHours, schedulerData.playerAssignments, schedulerData.assignments, tempWaitingList, 4);
+    scheduleNobleAdvisors(advisorList, minHours, schedulerData, schedulerData.assignments, tempWaitingList, 4);
 
     // Consolidate waiting list
     const consolidatedWaitingList = [];
@@ -818,19 +828,64 @@ function calculateScheduleData(players) {
     consolidatedWaitingList.push(...seenPlayers.values());
 
     // Assign consolidated WL to open CM slots on days 1,2,5
+    // Priority: Construction King Day -> Research King Day -> Other
+    const priorityDays = [constructDay, researchDay, 1, 2, 5].filter((v, i, a) => a.indexOf(v) === i && [1, 2, 5].includes(v)); // Ensure unique and valid
+    
     for (const waitingPlayer of consolidatedWaitingList.slice()) {
         const playerId = `${waitingPlayer.player}-${waitingPlayer.alliance}`;
-        if (schedulerData.playerAssignments[playerId]?.ministerAssigned) {
-            consolidatedWaitingList.splice(consolidatedWaitingList.indexOf(waitingPlayer), 1);
-            continue;
-        }
-        const daysToTry = [1, 2, 5];
-        for (const day of daysToTry) {
+        const player = filtered.find(p => p[PLAYER] === waitingPlayer.player && p[ALLIANCE] === waitingPlayer.alliance);
+        if (!player) continue;
+
+        // Check availability against purpose: if construction assigned, don't try construction day
+        // But for "Other" days, we need to decide what flag to set.
+        // Logic: if assigning to constructDay, requires !constructionAssignments. 
+        // If researchDay, requires !researchAssignments.
+        // If other day, set based on day context (e.g. if day 1 is constr king, set constr). 
+        // Since we iterate priorityDays which are [constr, res, other], we can map day -> purpose.
+
+        for (const day of priorityDays) {
+            let canAssign = false;
+            let purposeToSet = '';
+            
+            if (day === constructDay) {
+                if (!schedulerData.constructionAssignments[playerId]) {
+                    canAssign = true;
+                    purposeToSet = 'constructionAssignments';
+                }
+            } else if (day === researchDay) {
+                if (!schedulerData.researchAssignments[playerId]) {
+                    canAssign = true;
+                    purposeToSet = 'researchAssignments';
+                }
+            } else {
+                // For non-king days in 1,2,5, assign if not assigned to corresponding king purpose?
+                // Or treat as generic minister? Requirements say: construction/research may NOT spill over to day 4.
+                // It implies 1,2,5 are safe. 
+                // Let's assume if we assign to day 1/2/5 non-king, we set the flag corresponding to that day's potential role or just construction?
+                // Actually, simply check if we can assign without violating purpose.
+                // If day 1 is construction king, assigning to day 1 sets constructionAssignments.
+                // If day 5 is neither, what do we set? 
+                // Let's stick to: try construction king day (set constr), try research king day (set res). 
+                // If there are other days (e.g. day 5), we can assign there. What flag to set? 
+                // Maybe set construction if day is closer to construction? 
+                // To be safe and simple: if assigning to day 5, set constructionAssignments as default fallback?
+                // Or check which flag is open. 
+                if (!schedulerData.constructionAssignments[playerId]) {
+                    canAssign = true;
+                    purposeToSet = 'constructionAssignments';
+                } else if (!schedulerData.researchAssignments[playerId]) {
+                    canAssign = true;
+                    purposeToSet = 'researchAssignments';
+                }
+            }
+
+            if (!canAssign) continue;
+
             const taken = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
             const slots = generateTimeSlots();
-            const player = filtered.find(p => p[PLAYER] === waitingPlayer.player && p[ALLIANCE] === waitingPlayer.alliance);
+            
             for (const slot of slots) {
-                if (!taken.has(slot.start) && player && isSlotAvailable(player, slot.start, slot.end)) {
+                if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
                     schedulerData.assignments[day].ministers.push({
                         start: slot.start,
                         end: slot.end,
@@ -839,31 +894,72 @@ function calculateScheduleData(players) {
                         speedups: `${Math.round(waitingPlayer.speedups.construction)} / ${Math.round(waitingPlayer.speedups.research)}`,
                         truegold: waitingPlayer.truegold
                     });
-                    schedulerData.playerAssignments[playerId].ministerAssigned = true;
+                    schedulerData[purposeToSet][playerId] = true;
                     consolidatedWaitingList.splice(consolidatedWaitingList.indexOf(waitingPlayer), 1);
                     break;
                 }
             }
-            if (schedulerData.playerAssignments[playerId]?.ministerAssigned) {
+            // If assigned, break day loop for this player (one minister slot per pass? or can have multiple? 
+            // "people spilling over to the other of day 1, 2, 5 if they didn't get assigned during the first pass")
+            // Usually one assignment per list pass.
+            if (consolidatedWaitingList.indexOf(waitingPlayer) === -1) {
                 break;
             }
         }
     }
 
-    // Assign remaining WL to days 3 and 4 (CM-only)
+    // Last Resort: Day 3 Minister Assignment
+    // Separately assign qualified minister players still in WL to Day 3 minister slots.
+    // Set ALL three purpose flags.
     for (const waitingPlayer of consolidatedWaitingList.slice()) {
         const playerId = `${waitingPlayer.player}-${waitingPlayer.alliance}`;
-        if (schedulerData.playerAssignments[playerId]?.ministerAssigned) {
-            consolidatedWaitingList.splice(consolidatedWaitingList.indexOf(waitingPlayer), 1);
-            continue;
+        const player = filtered.find(p => p[PLAYER] === waitingPlayer.player && p[ALLIANCE] === waitingPlayer.alliance);
+        if (!player) continue;
+
+        // Must be minister qualified? The list contains mixed. Filter by minHours?
+        // consolidatedWaitingList items have speedups object.
+        if ((waitingPlayer.speedups.construction + waitingPlayer.speedups.research) < minHours) continue;
+
+        const day = 3;
+        const taken = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
+        const slots = generateTimeSlots();
+
+        for (const slot of slots) {
+            if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
+                schedulerData.assignments[day].ministers.push({
+                    start: slot.start,
+                    end: slot.end,
+                    alliance: waitingPlayer.alliance,
+                    player: waitingPlayer.player,
+                    speedups: `${Math.round(waitingPlayer.speedups.construction)} / ${Math.round(waitingPlayer.speedups.research)}`,
+                    truegold: waitingPlayer.truegold
+                });
+                schedulerData.constructionAssignments[playerId] = true;
+                schedulerData.researchAssignments[playerId] = true;
+                schedulerData.trainingAssignments[playerId] = true;
+                consolidatedWaitingList.splice(consolidatedWaitingList.indexOf(waitingPlayer), 1);
+                break;
+            }
         }
-        const daysToTry = [3, 4];
-        for (const day of daysToTry) {
+    }
+
+    // Step 4: Advisor Overflow to Day 4 Minister (sets research only)
+    // Only for players qualified for advisor who are still in WL
+    for (const waitingPlayer of consolidatedWaitingList.slice()) {
+        const playerId = `${waitingPlayer.player}-${waitingPlayer.alliance}`;
+        const player = filtered.find(p => p[PLAYER] === waitingPlayer.player && p[ALLIANCE] === waitingPlayer.alliance);
+        if (!player) continue;
+        
+        if (waitingPlayer.speedups.soldier < minHours) continue;
+
+        // Try Day 4 minister slots
+        if (!schedulerData.researchAssignments[playerId]) {
+            const day = 4;
             const taken = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
             const slots = generateTimeSlots();
-            const player = filtered.find(p => p[PLAYER] === waitingPlayer.player && p[ALLIANCE] === waitingPlayer.alliance);
+            
             for (const slot of slots) {
-                if (!taken.has(slot.start) && player && isSlotAvailable(player, slot.start, slot.end)) {
+                if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
                     schedulerData.assignments[day].ministers.push({
                         start: slot.start,
                         end: slot.end,
@@ -872,13 +968,10 @@ function calculateScheduleData(players) {
                         speedups: `${Math.round(waitingPlayer.speedups.construction)} / ${Math.round(waitingPlayer.speedups.research)}`,
                         truegold: waitingPlayer.truegold
                     });
-                    schedulerData.playerAssignments[playerId].ministerAssigned = true;
+                    schedulerData.researchAssignments[playerId] = true;
                     consolidatedWaitingList.splice(consolidatedWaitingList.indexOf(waitingPlayer), 1);
                     break;
                 }
-            }
-            if (schedulerData.playerAssignments[playerId]?.ministerAssigned) {
-                break;
             }
         }
     }
@@ -928,6 +1021,28 @@ async function processAndSchedule(players) {
 function loadSchedulerSystem(data) {
     // Update global state
     Object.assign(schedulerData, data);
+
+    // Migration for new assignment maps if missing
+    if (!schedulerData.constructionAssignments) schedulerData.constructionAssignments = {};
+    if (!schedulerData.researchAssignments) schedulerData.researchAssignments = {};
+    if (!schedulerData.trainingAssignments) schedulerData.trainingAssignments = {};
+
+    // Map old playerAssignments if present and new maps are empty
+    // @ts-ignore
+    if (data.playerAssignments && Object.keys(schedulerData.constructionAssignments).length === 0) {
+        // @ts-ignore
+        for (const [id, flags] of Object.entries(data.playerAssignments)) {
+             // @ts-ignore
+             if (flags.ministerAssigned) {
+                 schedulerData.constructionAssignments[id] = true;
+                 schedulerData.researchAssignments[id] = true;
+             }
+             // @ts-ignore
+             if (flags.advisorAssigned) {
+                 schedulerData.trainingAssignments[id] = true;
+             }
+        }
+    }
 
     // Set defaults for new fields
     schedulerData.constructionKingDay = schedulerData.constructionKingDay ?? 1;
@@ -1131,10 +1246,19 @@ function submitAddPlayer() {
     // Initialize assignment tracking
     // @ts-ignore
     const playerId = `${newPlayer[PLAYER]}-${newPlayer[ALLIANCE]}`;
-    schedulerData.playerAssignments[playerId] = { ministerAssigned: false, advisorAssigned: false };
+    const minHours = schedulerData.minHours;
+
+    // @ts-ignore
+    if (newPlayer[CONSTRUCTION] + newPlayer[RESEARCH] >= minHours) {
+        schedulerData.constructionAssignments[playerId] = false;
+        schedulerData.researchAssignments[playerId] = false;
+    }
+    // @ts-ignore
+    if (newPlayer[SOLDIER_TRAINING] >= minHours) {
+        schedulerData.trainingAssignments[playerId] = false;
+    }
 
     // 2. Filter Check
-    const minHours = schedulerData.minHours;
     // @ts-ignore
     const isMinisterQualified = (newPlayer[CONSTRUCTION] + newPlayer[RESEARCH]) >= minHours;
     // @ts-ignore
@@ -1152,7 +1276,7 @@ function submitAddPlayer() {
     const assignmentsMade = [];
 
     // Attempt Construction buff
-    if (player[CONSTRUCTION] >= minHours && !schedulerData.playerAssignments[playerId].ministerAssigned) {
+    if (newPlayer[CONSTRUCTION] >= minHours && !schedulerData.constructionAssignments[playerId]) {
         const constructDay = parseInt(document.getElementById('constructionKingDay').value) || 1;
         const taken = new Set(schedulerData.assignments[constructDay].ministers.map(a => a.start));
         const slots = generateTimeSlots();
@@ -1171,43 +1295,43 @@ function submitAddPlayer() {
                     // @ts-ignore
                     truegold: newPlayer[TRUEGOLD_PIECES]
                 });
-                schedulerData.playerAssignments[playerId].ministerAssigned = true;
+                schedulerData.constructionAssignments[playerId] = true;
                 assignmentsMade.push({ day: constructDay, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
                 break;
             }
         }
-        // Fallback to other days in 1,2,5
-        if (!schedulerData.playerAssignments[playerId].ministerAssigned) {
-            const fallbackDays = [1, 2, 5].filter(d => d !== constructDay);
-            for (const day of fallbackDays) {
-                const takenFallback = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
-                for (const slot of slots) {
-                    // @ts-ignore
-                    if (!takenFallback.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
-                        schedulerData.assignments[day].ministers.push({
-                            start: slot.start,
-                            end: slot.end,
-                            // @ts-ignore
-                            alliance: newPlayer[ALLIANCE],
-                            // @ts-ignore
-                            player: newPlayer[PLAYER],
-                            // @ts-ignore
-                            speedups: `${Math.round(newPlayer[CONSTRUCTION])}`,
-                            // @ts-ignore
-                            truegold: newPlayer[TRUEGOLD_PIECES]
-                        });
-                        schedulerData.playerAssignments[playerId].ministerAssigned = true;
-                        assignmentsMade.push({ day: day, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
-                        break;
-                    }
+    }
+    // Fallback to other days in 1,2,5
+    if (!schedulerData.constructionAssignments[playerId]) {
+        const fallbackDays = [1, 2, 5].filter(d => d !== constructDay);
+        for (const day of fallbackDays) {
+            const takenFallback = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
+            for (const slot of slots) {
+                // @ts-ignore
+                if (!takenFallback.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
+                    schedulerData.assignments[day].ministers.push({
+                        start: slot.start,
+                        end: slot.end,
+                        // @ts-ignore
+                        alliance: newPlayer[ALLIANCE],
+                        // @ts-ignore
+                        player: newPlayer[PLAYER],
+                        // @ts-ignore
+                        speedups: `${Math.round(newPlayer[CONSTRUCTION])}`,
+                        // @ts-ignore
+                        truegold: newPlayer[TRUEGOLD_PIECES]
+                    });
+                    schedulerData.constructionAssignments[playerId] = true;
+                    assignmentsMade.push({ day: day, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
+                    break;
                 }
-                if (schedulerData.playerAssignments[playerId].ministerAssigned) break;
             }
+            if (schedulerData.constructionAssignments[playerId]) break;
         }
     }
 
     // Attempt Research buff
-    if (player[RESEARCH] >= minHours && !schedulerData.playerAssignments[playerId].ministerAssigned) {
+    if (newPlayer[RESEARCH] >= minHours && !schedulerData.researchAssignments[playerId]) {
         const researchDay = parseInt(document.getElementById('researchKingDay').value) || 2;
         const taken = new Set(schedulerData.assignments[researchDay].ministers.map(a => a.start));
         const slots = generateTimeSlots();
@@ -1226,13 +1350,13 @@ function submitAddPlayer() {
                     // @ts-ignore
                     truegold: newPlayer[TRUEGOLD_PIECES]
                 });
-                schedulerData.playerAssignments[playerId].ministerAssigned = true;
+                schedulerData.researchAssignments[playerId] = true;
                 assignmentsMade.push({ day: researchDay, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
                 break;
             }
         }
         // Fallback to other days in 1,2,5
-        if (!schedulerData.playerAssignments[playerId].ministerAssigned) {
+        if (!schedulerData.researchAssignments[playerId]) {
             const fallbackDays = [1, 2, 5].filter(d => d !== researchDay);
             for (const day of fallbackDays) {
                 const takenFallback = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
@@ -1251,18 +1375,18 @@ function submitAddPlayer() {
                             // @ts-ignore
                             truegold: newPlayer[TRUEGOLD_PIECES]
                         });
-                        schedulerData.playerAssignments[playerId].ministerAssigned = true;
+                        schedulerData.researchAssignments[playerId] = true;
                         assignmentsMade.push({ day: day, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
                         break;
                     }
                 }
-                if (schedulerData.playerAssignments[playerId].ministerAssigned) break;
+                if (schedulerData.researchAssignments[playerId]) break;
             }
         }
     }
 
     // Attempt Advisor (Day 4)
-    if (player[SOLDIER_TRAINING] >= minHours && !schedulerData.playerAssignments[playerId].advisorAssigned) {
+    if (newPlayer[SOLDIER_TRAINING] >= minHours && !schedulerData.trainingAssignments[playerId]) {
         const day = 4;
         const advisorSlots = generateTimeSlots();
         const ministerSlots = generateTimeSlots(); // For overflow
@@ -1286,15 +1410,15 @@ function submitAddPlayer() {
                     // @ts-ignore
                     truegold: newPlayer[TRUEGOLD_PIECES]
                 });
-                schedulerData.playerAssignments[playerId].advisorAssigned = true;
+                schedulerData.trainingAssignments[playerId] = true;
                 assignmentsMade.push({ day: day, role: 'advisors', slotStr: `${slot.start}-${slot.end}` });
                 assigned = true;
                 break;
               }
         }
 
-        // Overflow to Chief Minister if needed and not already ministerAssigned
-        if (!assigned && !schedulerData.playerAssignments[playerId].ministerAssigned) {
+        // Overflow to Chief Minister if needed and not already assigned to research
+        if (!assigned && !schedulerData.researchAssignments[playerId]) {
               for (const slot of ministerSlots) {
                   // @ts-ignore
                   if (!takenMinister.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
@@ -1310,8 +1434,7 @@ function submitAddPlayer() {
                         // @ts-ignore
                         truegold: newPlayer[TRUEGOLD_PIECES]
                     });
-                      schedulerData.playerAssignments[playerId].advisorAssigned = true; // Counts as advisor
-                      schedulerData.playerAssignments[playerId].ministerAssigned = true; // Prevent double CM globally
+                      schedulerData.researchAssignments[playerId] = true; // Sets research assignment only
                       assignmentsMade.push({ day: 4, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
                       assigned = true;
                       break;
@@ -1424,7 +1547,9 @@ function submitRemoveUser() {
     });
     
     // 3. Remove from assignment tracking
-    delete schedulerData.playerAssignments[idToRemove];
+    delete schedulerData.constructionAssignments[idToRemove];
+    delete schedulerData.researchAssignments[idToRemove];
+    delete schedulerData.trainingAssignments[idToRemove];
     
     finishManagementAction("User removed successfully.");
 }
@@ -1639,19 +1764,33 @@ function performAssignment(day, role, start, end) {
     schedulerData.assignments[day][role].push(newAssignment);
     
     // 3. Update Tracking
-    // Note: This logic is simple; doesn't strictly enforce "1 minister slot max" if user overrides via UI.
-    // But we update flags for consistency.
-    if (role === 'ministers') {
-        // Special case: Day 4 Minister might be Advisor overflow
-        // If we are on Day 4 and strict minister req isn't met but advisor is...
-        // For simplicity, if it's Day 4, we mark advisorAssigned if they are advisor qualified?
-        // Or just mark based on the role column?
-        // Let's stick to the convention: Day 4 minister slot is ambiguous.
-        // We'll just mark ministerAssigned unless it's strictly advisor logic. 
-        // However, user manual assignment overrides rules.
-        schedulerData.playerAssignments[targetId].ministerAssigned = true;
+    const constructDay = schedulerData.constructionKingDay;
+    const researchDay = schedulerData.researchKingDay;
+
+    if (day === 3 && role === 'ministers') {
+        schedulerData.constructionAssignments[targetId] = true;
+        schedulerData.researchAssignments[targetId] = true;
+        schedulerData.trainingAssignments[targetId] = true;
+    } else if (day === constructDay && role === 'ministers') {
+        schedulerData.constructionAssignments[targetId] = true;
+    } else if ((day === researchDay || day === 4) && role === 'ministers') {
+        schedulerData.researchAssignments[targetId] = true;
+    } else if (day === 4 && role === 'advisors') {
+        schedulerData.trainingAssignments[targetId] = true;
     } else {
-        schedulerData.playerAssignments[targetId].advisorAssigned = true;
+        // Fallback for non-king days (1, 2, 5) if they aren't covered above
+        // If assigned to a minister role, assume construction or research?
+        // Let's set construction if it's available, otherwise research.
+        // Or better: don't set a specific purpose flag if it's "generic", but wait...
+        // The prompt implies strict purpose mapping.
+        // If I assign to Day 5 and it's not a king day, it's still a minister slot.
+        // Users might use it for construction or research. 
+        // Let's check which flag is false and set it?
+        if (!schedulerData.constructionAssignments[targetId]) {
+             schedulerData.constructionAssignments[targetId] = true;
+        } else {
+             schedulerData.researchAssignments[targetId] = true;
+        }
     }
 
     finishManagementAction(`Assigned ${alliance}/${player} to Day ${day} ${role === 'ministers' ? 'Chief Minister' : 'Noble Advisor'} (${start}-${end}).`);
@@ -1669,18 +1808,44 @@ function removeAssignment(day, role, start, alliance, player) {
     // We don't necessarily reset the 'ministerAssigned' flag because they might have other slots?
     // Current logic enforces 1 slot per role type generally. 
     // Checking if they have other slots of this type is safer.
-    const hasOtherMinister = [1,2,4,5].some(d => schedulerData.assignments[d].ministers.some(a => a.alliance === alliance && a.player === player));
-    const hasOtherAdvisor = [1,2,4,5].some(d => schedulerData.assignments[d].advisors.some(a => a.alliance === alliance && a.player === player));
     
     const id = `${player}-${alliance}`;
-    schedulerData.playerAssignments[id].ministerAssigned = hasOtherMinister;
-    schedulerData.playerAssignments[id].advisorAssigned = hasOtherAdvisor;
+    const constructDay = schedulerData.constructionKingDay;
+    const researchDay = schedulerData.researchKingDay;
 
-    // Add back to waiting list? The prompt didn't strictly say, but usually yes.
-    // Or just leave them floating (available to be assigned). 
-    // "cancel just discards, add adds... remove removes... reassign lets user assign"
-    // We'll add them to waiting list so they are visible for re-adding.
-    if (!hasOtherMinister && !hasOtherAdvisor) {
+    // Helper to check assignment
+    const hasAssig = (d, r) => schedulerData.assignments[d] && schedulerData.assignments[d][r].some(a => a.alliance === alliance && a.player === player);
+
+    const hasDay3 = hasAssig(3, 'ministers');
+    const hasDay4Minister = hasAssig(4, 'ministers');
+    const hasDay4Advisor = hasAssig(4, 'advisors');
+    const hasConstructKing = hasAssig(constructDay, 'ministers');
+    const hasResearchKing = hasAssig(researchDay, 'ministers');
+
+    // Base flags
+    let isConstr = hasConstructKing || hasDay3;
+    let isRes = hasResearchKing || hasDay4Minister || hasDay3;
+    let isTrain = hasDay4Advisor || hasDay3;
+
+    // Handle "Other" days (1, 2, 5 non-king)
+    // Iterate them to mimic allocation logic
+    const otherDays = [1, 2, 5].filter(d => d !== constructDay && d !== researchDay);
+    otherDays.forEach(d => {
+        if (hasAssig(d, 'ministers')) {
+            if (!isConstr) isConstr = true;
+            else isRes = true;
+        }
+    });
+
+    schedulerData.constructionAssignments[id] = isConstr;
+    schedulerData.researchAssignments[id] = isRes;
+    schedulerData.trainingAssignments[id] = isTrain;
+
+    // Add back to waiting list if completely unassigned?
+    // Check if any assignment remains
+    const hasAny = isConstr || isRes || isTrain;
+
+    if (!hasAny) {
         // Re-construct waiting entry
         const p = schedulerData.processedPlayers.find(pl => pl.alliance === alliance && pl.player === player);
         if (p) {
