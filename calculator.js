@@ -313,8 +313,8 @@ function generateTimeSlots() {
     for (let hour = 0; hour < 24; hour++) {
         for (let minute = 0; minute < 60; minute += 30) {
             const start = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-            const endMinute = minute + 30;
-            const endHour = hour + Math.floor(endMinute / 60);
+            const endHour = hour + Math.floor((minute+30) / 60);
+            const endMinute = minute + 10; // we use 10 because that's all a player really needs to be able to make full use of the slot
             const endMin = endMinute % 60;
             const end = `${(endHour % 24).toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`;
             slots.push({ start, end });
