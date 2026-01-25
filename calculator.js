@@ -986,7 +986,7 @@ function calculateScheduleData(players) {
  * @param {boolean} [scrollToTop=false] - Whether to scroll to the top of Day 1 section.
  */
 function renderUI(data, scrollToTop = false) {
-    populateDebugTable(data.processedPlayers);
+    populateDebugTable(data.rawPlayers);
     updateScheduleTables(data.assignments, data.waitingList);
     updateFilteredList(data.filteredOut);
     document.querySelectorAll('.day-section').forEach(el => el.style.display = 'block');
