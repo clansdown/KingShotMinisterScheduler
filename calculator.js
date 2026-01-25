@@ -108,12 +108,12 @@ const CATEGORY_RESEARCH = 'research';
 /**
  * Parses a CSV text into an array of objects, handling quoted fields and auto-detecting delimiter (comma or tab).
  * @param {string} csvText - The raw CSV text from the file.
- * @returns {Array<PlayerObject>} Array of player objects with fields matching CSV headers, including parsed time ranges.
+ * @returns {{players: Array<PlayerObject>, errors: Array<string>}} Object containing array of player objects and array of error strings.
  */
 function parseCsvToObjects(csvText) {
     const lines = csvText.split('\n').filter(line => line.trim() !== '');
     if (lines.length === 0) {
-        return [];
+        return { players: [], errors: [] };
     }
 
     // Auto-detect delimiter based on first line
@@ -154,28 +154,72 @@ function parseCsvToObjects(csvText) {
 
     const headers = parseCsvLine(firstLine, delimiter);
     const players = [];
+    const errors = [];
+
     for (let i = 1; i < lines.length; i++) {
         const fields = parseCsvLine(lines[i], delimiter);
-        if (fields.length === headers.length) {
-            const player = {};
-            headers.forEach((header, index) => {
+        const lineNumber = i + 1; // 1-based line number for user (header is line 1)
+        const rawLine = lines[i];
+
+        if (fields.length < headers.length) {
+            errors.push(`Line ${lineNumber}: Field count mismatch - expected at least ${headers.length} fields, got ${fields.length}. Raw line: "${rawLine}"`);
+            continue;
+        }
+
+        const player = {};
+        let lineHasError = false;
+
+        headers.forEach((header, index) => {
+            if (index < fields.length) {
                 player[header.toLowerCase().trim()] = fields[index];
-            });
-            // Convert numeric fields
-            player[GENERAL_SPEEDUPS] = parseFloat(player[GENERAL_SPEEDUPS]) || 0;
-            player[SOLDIER_TRAINING] = parseFloat(player[SOLDIER_TRAINING]) || 0;
-            player[CONSTRUCTION] = parseFloat(player[CONSTRUCTION]) || 0;
-            player[RESEARCH] = parseFloat(player[RESEARCH]) || 0;
-            player[TRUEGOLD_PIECES] = parseFloat(player[TRUEGOLD_PIECES]) || 0;
-              // Parse availableTimeRanges from 'All Times'
-              player.availableTimeRanges = parseTimeRanges(player[ALL_TIMES]);
-              // Union with overall time window
-              const overallRanges = parseTimeRanges(`${player[TIME_SLOT_START_UTC]}-${player[TIME_SLOT_END_UTC]}`);
-              player.availableTimeRanges = unionTimeRanges(overallRanges.concat(player.availableTimeRanges));
-              players.push(player);
+            }
+        });
+
+        // Convert numeric fields and validate
+        const numericFields = [GENERAL_SPEEDUPS, SOLDIER_TRAINING, CONSTRUCTION, RESEARCH, TRUEGOLD_PIECES];
+        numericFields.forEach(field => {
+            const val = parseFloat(player[field]);
+            if (isNaN(val)) {
+                 // Check if it's empty string which defaults to 0 usually, but parseFloat('') is NaN
+                 // If original string was empty, treat as 0? Existing code: parseFloat(player[...]) || 0
+                 // If original was non-empty non-numeric string, it's an error?
+                 // Let's stick to existing behavior: parseFloat(...) || 0 covers NaN, but we want to error on garbage.
+                 // Actually, existing code did: player[...] = parseFloat(...) || 0;
+                 // But request says "mal-formed lines... generate descriptive error".
+                 // So "abc" in number field should error.
+                 if (player[field] && isNaN(parseFloat(player[field]))) {
+                     errors.push(`Line ${lineNumber}: Invalid number in '${field}' field: "${player[field]}". Raw line: "${rawLine}"`);
+                     lineHasError = true;
+                 }
+            }
+            player[field] = parseFloat(player[field]) || 0;
+        });
+
+        if (lineHasError) continue;
+
+        try {
+            // Parse availableTimeRanges from 'All Times'
+            player.availableTimeRanges = parseTimeRanges(player[ALL_TIMES]);
+            
+            // Validate time slot start/end format if present
+            const start = player[TIME_SLOT_START_UTC];
+            const end = player[TIME_SLOT_END_UTC];
+            if (start && !/^\d{1,2}(:\d{2})?$/.test(start)) {
+                 throw new Error(`Invalid format for '${TIME_SLOT_START_UTC}': "${start}"`);
+            }
+            if (end && !/^\d{1,2}(:\d{2})?$/.test(end)) {
+                 throw new Error(`Invalid format for '${TIME_SLOT_END_UTC}': "${end}"`);
+            }
+
+            // Union with overall time window
+            const overallRanges = parseTimeRanges(`${player[TIME_SLOT_START_UTC]}-${player[TIME_SLOT_END_UTC]}`);
+            player.availableTimeRanges = unionTimeRanges(overallRanges.concat(player.availableTimeRanges));
+            players.push(player);
+        } catch (e) {
+            errors.push(`Line ${lineNumber}: Time parsing error - ${e.message}. Raw line: "${rawLine}"`);
         }
     }
-    return players;
+    return { players, errors };
 }
 
 /**
@@ -699,9 +743,9 @@ function populateDebugTable(players) {
 /**
  * Calculates the schedule and updates the global schedulerData object.
  * @param {Array<PlayerObject>} players - Array of player objects from CSV.
- * @param {number} minHours - Minimum hours required for construction+research or training.
+ * @param {Array<string>} [errors=[]] - Array of error strings from parsing.
  */
-function calculateScheduleData(players) {
+function calculateScheduleData(players, errors = []) {
     const minHours = parseInt(document.getElementById('minHoursInput').value) || 20;
     const constructDay = parseInt(document.getElementById('constructionKingDay').value) || 1;
     const researchDay = parseInt(document.getElementById('researchKingDay').value) || 2;
@@ -713,6 +757,8 @@ function calculateScheduleData(players) {
     schedulerData.researchKingDay = researchDay;
     schedulerData.rawPlayers = JSON.parse(JSON.stringify(players));
     schedulerData.processedPlayers = players; // In-place modification will happen on this array
+    // @ts-ignore
+    schedulerData.errors = errors; // Store for immediate display
 
     // Allocate general speedups
     schedulerData.processedPlayers.forEach(allocateGeneralSpeedups);
@@ -984,12 +1030,30 @@ function calculateScheduleData(players) {
  * Renders the UI based on the provided scheduler data.
  * @param {SchedulerData} data - The data to render.
  * @param {boolean} [scrollToTop=false] - Whether to scroll to the top of Day 1 section.
+ * @param {Array<string>} [errors=[]] - Array of error strings to display.
  */
-function renderUI(data, scrollToTop = false) {
+function renderUI(data, scrollToTop = false, errors = []) {
     populateDebugTable(data.rawPlayers);
     updateScheduleTables(data.assignments, data.waitingList);
     updateFilteredList(data.filteredOut);
     document.querySelectorAll('.day-section').forEach(el => el.style.display = 'block');
+
+    const errorBox = document.getElementById('errorBox');
+    // @ts-ignore
+    const dataErrors = data.errors || [];
+    const allErrors = errors.concat(dataErrors);
+    // Deduplicate
+    const uniqueErrors = [...new Set(allErrors)];
+    
+    if (uniqueErrors.length > 0) {
+        errorBox.innerHTML = '<h4>CSV Parsing Errors:</h4><ol>' + uniqueErrors.map(e => '<li>' + e + '</li>').join('') + '</ol>';
+        errorBox.classList.remove('d-none');
+        errorBox.style.display = 'block';
+    } else {
+        errorBox.style.display = 'none';
+        errorBox.classList.add('d-none');
+    }
+
     if (scrollToTop) {
         document.getElementById('day1HeadingWrapper').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -999,16 +1063,16 @@ function renderUI(data, scrollToTop = false) {
 /**
  * Processes players, allocates speedups, filters, creates lists, and schedules appointments.
  * @param {Array<PlayerObject>} players - Array of player objects from CSV.
- * @param {number} minHours - Minimum hours required for construction+research or training.
+ * @param {Array<string>} [errors=[]] - Parsing errors.
  */
-async function processAndSchedule(players) {
-    calculateScheduleData(players);
+async function processAndSchedule(players, errors = []) {
+    calculateScheduleData(players, errors);
     try {
         await saveSchedulerData(schedulerData);
     } catch (e) {
         console.error("Failed to save scheduler data to storage", e);
     }
-    renderUI(schedulerData);
+    renderUI(schedulerData, false, errors);
 }
 
 
@@ -1144,12 +1208,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const file = event.target.files[0];
         if (file) {
             document.getElementById('loadingIndicator').style.display = 'block';
+            // Reset error box
+            const errorBox = document.getElementById('errorBox');
+            if (errorBox) {
+                errorBox.style.display = 'none';
+                errorBox.classList.add('d-none');
+                errorBox.innerHTML = '';
+            }
+            
             const reader = new FileReader();
             reader.onload = function(e) {
                 const csvText = e.target.result;
-                const players = parseCsvToObjects(csvText);
+                const { players, errors } = parseCsvToObjects(csvText);
                 // Process and schedule
-                processAndSchedule(players);
+                processAndSchedule(players, errors);
             };
             reader.readAsText(file);
         }
