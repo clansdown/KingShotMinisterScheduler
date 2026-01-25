@@ -344,43 +344,45 @@ function timeToMinutes(time) {
 function isSlotAvailable(player, slotStart, slotEnd) {
     const slotStartMin = timeToMinutes(slotStart);
     const slotEndMin = timeToMinutes(slotEnd);
-    const overallStart = timeToMinutes(player[TIME_SLOT_START_UTC]);
-    const overallEnd = timeToMinutes(player[TIME_SLOT_END_UTC]);
+    const ranges = player.availableTimeRanges;
+
+    // If no specific ranges, no constraints
+    if (ranges.length === 0) {
+        return true;
+    }
+
+    // Compute overall window from all ranges
+    const overallStart = Math.min(...ranges.map(r => timeToMinutes(r.start)));
+    const overallEnd = Math.max(...ranges.map(r => timeToMinutes(r.end)));
 
     // Check overall window (for crossing slots, endMin might be 0, handle accordingly)
     const adjustedSlotEndMin = slotEndMin < slotStartMin ? slotEndMin + 1440 : slotEndMin;
     const adjustedOverallEnd = overallEnd < overallStart ? overallEnd + 1440 : overallEnd;
-    if (slotStartMin < overallStart || adjustedSlotEndMin > adjustedOverallEnd) {
+    if (slotStartMin < overallStart) {
+        return false;
+    }
+    if (adjustedSlotEndMin > adjustedOverallEnd) {
         return false;
     }
 
-    // If no specific ranges, overall is sufficient
-    if (player.availableTimeRanges.length === 0) {
+    // Crossing slot = consider available (assumes ranges cover 00:00-23:59)
+    if (slotEndMin < slotStartMin) {
         return true;
     }
 
-    // Check if slot fits within any range
-    if (slotEndMin > slotStartMin) {
-        // Normal slot
-        return player.availableTimeRanges.some(range => {
-            const rangeStartMin = timeToMinutes(range.start);
-            const rangeEndMin = timeToMinutes(range.end);
-            return slotStartMin >= rangeStartMin && slotEndMin <= rangeEndMin;
-        });
-    } else {
-        // Crossing slot: check late-night (slotStart to 23:59) and early-morning (00:00 to slotEnd)
-        const hasLate = player.availableTimeRanges.some(range => {
-            const rangeStartMin = timeToMinutes(range.start);
-            const rangeEndMin = timeToMinutes(range.end);
-            return slotStartMin >= rangeStartMin && rangeEndMin >= slotStartMin;
-        });
-        const hasEarly = player.availableTimeRanges.some(range => {
-            const rangeStartMin = timeToMinutes(range.start);
-            const rangeEndMin = timeToMinutes(range.end);
-            return rangeStartMin <= 0 && slotEndMin <= rangeEndMin;
-        });
-        return hasLate && hasEarly;
-    }
+    // Normal slot: calculate total minutes covered by availableTimeRanges
+    let totalOverlap = 0;
+    ranges.forEach(range => {
+        const rangeStartMin = timeToMinutes(range.start);
+        const rangeEndMin = timeToMinutes(range.end);
+        const overlapStart = Math.max(slotStartMin, rangeStartMin);
+        const overlapEnd = Math.min(slotEndMin, rangeEndMin);
+        const overlap = Math.max(0, overlapEnd - overlapStart);
+        totalOverlap += overlap;
+    });
+    
+    // Available if at least 10 minutes overlap
+    return totalOverlap >= 10;
 }
 
 
