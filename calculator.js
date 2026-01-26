@@ -967,18 +967,24 @@ function validateAndAssignUnassignedPlayers(schedulerData, minHours, spilloverDa
                     : 'No available ranges'
             };
 
-            // Add to all waiting lists for which the player qualifies
+            let addedToOtherDay = false;
+            // Add to waiting lists for which the player qualifies
             if (player[CONSTRUCTION] >= minHours) {
                 schedulerData.waitingLists[schedulerData.constructionKingDay].push({ ...waitingPlayer });
+                addedToOtherDay = true;
             }
             if (player[RESEARCH] >= minHours) {
                 schedulerData.waitingLists[schedulerData.researchKingDay].push({ ...waitingPlayer });
+                addedToOtherDay = true;
             }
             if (player[SOLDIER_TRAINING] >= minHours) {
                 schedulerData.waitingLists[4].push({ ...waitingPlayer });
+                addedToOtherDay = true;
             }
-            // Always add to spillover day waiting list for general access
-            schedulerData.waitingLists[spilloverDay].push({ ...waitingPlayer });
+            // Add to spillover day waiting list only if not added to another day
+            if (!addedToOtherDay) {
+                schedulerData.waitingLists[spilloverDay].push({ ...waitingPlayer });
+            }
         } else {
             schedulerData.filteredOut.push(player);
         }
