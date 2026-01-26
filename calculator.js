@@ -708,7 +708,7 @@ function populateWaitingList(waiting) {
         waiting.forEach(player => {
             const li = document.createElement('li');
             li.className = 'mb-2';
-            li.textContent = `${player.alliance}/${player.player} - Speedups: T:${player.speedups.soldier} C:${player.speedups.construction} R:${player.speedups.research} - TrueGold: ${player.truegold} - Time Slots: ${player.timeSlots} `;
+            li.textContent = `${player.alliance}/${player.player} - T:${player.speedups.soldier} C:${player.speedups.construction} R:${player.speedups.research} TG:${player.truegold} - Time Slots: ${player.timeSlots} `;
             
             // Assign Button
             const assignBtn = document.createElement('button');
@@ -735,7 +735,7 @@ function updateFilteredList(filteredOut) {
             const li = document.createElement('li');
             li.className = 'mb-2';
             // @ts-ignore
-            li.textContent = `${player[ALLIANCE]}/${player[PLAYER]} - Speedups: T:${Math.round(player[SOLDIER_TRAINING])} C:${Math.round(player[CONSTRUCTION])} R:${Math.round(player[RESEARCH])} - TrueGold: ${Math.round(player[TRUEGOLD_PIECES])} `;
+            li.textContent = `${player[ALLIANCE]}/${player[PLAYER]} - T:${Math.round(player[SOLDIER_TRAINING])} C:${Math.round(player[CONSTRUCTION])} R:${Math.round(player[RESEARCH])} TG:${Math.round(player[TRUEGOLD_PIECES])} `;
             
             // Assign Button
             const assignBtn = document.createElement('button');
@@ -990,6 +990,54 @@ function calculateScheduleData(players, errors = []) {
 
     // Set global waiting list
     schedulerData.waitingList = consolidatedWaitingList;
+    validateAndAssignUnassignedPlayers(schedulerData, minHours);
+}
+
+/**
+ * Validates that all processed players are either assigned, on the waiting list, or filtered out.
+ * Logs errors for any unassigned players not in waiting list or filtered out.
+ * Adds such players to waiting list (if total speedups >= minHours) or filtered out list.
+ * @param {SchedulerData} schedulerData - Main data object.
+ * @param {number} minHours - Minimum hours threshold.
+ */
+function validateAndAssignUnassignedPlayers(schedulerData, minHours) {
+    const allAppointments = Object.values(schedulerData.assignments).flatMap(day => day.ministers.concat(day.advisors));
+
+    schedulerData.processedPlayers.forEach(player => {
+        const alliance = player[ALLIANCE];
+        const playerName = player[PLAYER];
+        const playerId = `${playerName}-${alliance}`;
+
+        const isAssigned = allAppointments.some(app => app.alliance === alliance && app.player === playerName);
+        if (isAssigned) return;
+
+        const isOnWaitingList = schedulerData.waitingList.some(w => w.alliance === alliance && w.player === playerName);
+        if (isOnWaitingList) return;
+
+        const isFilteredOut = schedulerData.filteredOut.some(f => f[ALLIANCE] === alliance && f[PLAYER] === playerName);
+        if (isFilteredOut) return;
+
+        const totalSpeedups = getAllSpeedupsSum(player);
+        console.error(`Unassigned player ${alliance}/${playerName} (total speedups: ${totalSpeedups}) not found in assignments, waiting list, or filtered out.`);
+
+        if (totalSpeedups >= minHours) {
+            schedulerData.waitingList.push({
+                alliance: alliance,
+                player: playerName,
+                speedups: {
+                    soldier: Math.round(player[SOLDIER_TRAINING]),
+                    construction: Math.round(player[CONSTRUCTION]),
+                    research: Math.round(player[RESEARCH])
+                },
+                truegold: Math.round(player[TRUEGOLD_PIECES]),
+                timeSlots: player.availableTimeRanges.length > 0
+                    ? player.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ')
+                    : 'No available ranges'
+            });
+        } else {
+            schedulerData.filteredOut.push(player);
+        }
+    });
 }
 
 /**
