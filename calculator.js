@@ -1024,7 +1024,44 @@ function validateAndAssignUnassignedPlayers(schedulerData, minHours, spilloverDa
  * @param {boolean} [scrollToTop=false] - Whether to scroll to the top of Day 1 section.
  * @param {Array<string>} [errors=[]] - Array of error strings to display.
  */
+/**
+ * Updates the speedups column headers for all minister tables dynamically based on schedule roles.
+ * Called once per renderUI to batch-update headers before table population.
+ * @param {SchedulerData} schedulerData - The current schedule data.
+ */
+function updateMinisterSpeedupsHeaders(schedulerData) {
+    if (!schedulerData || !schedulerData.constructionKingDay || !schedulerData.researchKingDay) {
+        console.warn('schedulerData not loaded; skipping minister header updates.');
+        return;
+    }
+    // Calculate spillover day dynamically (matches calculateScheduleData)
+    const spilloverDay = [1, 2, 5].find(d => d !== schedulerData.constructionKingDay && d !== schedulerData.researchKingDay);
+
+    // Loop over minister table days and update headers
+    [1, 2, 4, 5].forEach(d => {
+        try {
+            const speedupsHeaderId = `day${d}-minister-speedups-header`;
+            const headerElement = document.getElementById(speedupsHeaderId);
+            if (headerElement) {  // Exists in HTML
+                if (d === schedulerData.constructionKingDay) {
+                    headerElement.textContent = 'Construction';
+                } else if (d === schedulerData.researchKingDay) {
+                    headerElement.textContent = 'Research';
+                } else if (d === 4) {
+                    headerElement.textContent = 'Training';
+                } else if (d === spilloverDay) {
+                    headerElement.textContent = 'Soldier / Construction / Research';
+                }
+                // No match: Leave as HTML default ('Speedups Cn/Rs')
+            }
+        } catch (error) {
+            console.error(`Failed to update speedups header for day ${d}:`, error);
+        }
+    });
+}
+
 function renderUI(data, scrollToTop = false, errors = []) {
+    updateMinisterSpeedupsHeaders(data);
     populateDebugTable(data.rawPlayers);
     updateScheduleTables(data.assignments);
     updateFilteredList(data.filteredOut);

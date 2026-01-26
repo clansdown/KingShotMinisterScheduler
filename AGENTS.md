@@ -2,7 +2,7 @@
 
 This file provides instructions for AI coding agents (e.g., opencode) working on the KingShotMinisterScheduler repository. It includes code style guidelines, and conventions to maintain consistency. The project is a stand-alone HTML/JavaScript application for scheduling minister/advisor appointments from CSV data.
 
-No linting or testing is required for this project.
+No linting or testing is required for this project. The agent should not attempt any testing.
 
 ## 1. Code Style Guidelines
 
