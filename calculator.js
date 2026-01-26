@@ -342,14 +342,13 @@ function scheduleTrainingDay(players, minHours, schedulerData, tempWaitingList) 
     // Candidates: Players qualified for advisor (training >= minHours) but NOT assigned as advisor
     
     let overflowCandidates = players.filter(p => !schedulerData.trainingAssignments[`${p[PLAYER]}-${p[ALLIANCE]}`]);
-    let unscheduledOverflow = overflowCandidates.filter(p => !schedulerData.researchAssignments[`${p[PLAYER]}-${p[ALLIANCE]}`]);
     const assignedMinisterSlots = [];
 
     // Round 1: Greedy Assignment for Overflow
-    assignFirstPass(unscheduledOverflow, ministerSlots, assignedMinisterSlots);
+    assignFirstPass(overflowCandidates, ministerSlots, assignedMinisterSlots);
 
     // Round 2: Minister Overflow Displacement (Displace if Training > C+R)
-    performDisplacement(unscheduledOverflow, assignedMinisterSlots, (p) => p[SOLDIER_TRAINING]);
+    performDisplacement(overflowCandidates, assignedMinisterSlots, (p) => p[SOLDIER_TRAINING]);
 
     // Finalize Minister Overflow Assignments
     const takenMinister = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
@@ -370,8 +369,8 @@ function scheduleTrainingDay(players, minHours, schedulerData, tempWaitingList) 
     });
 
     // Add remaining unassigned to waiting list
-    // unscheduledOverflow contains those not assigned in Stage 2.
-    tempWaitingList.push(...unscheduledOverflow.map(player => ({
+    // overflowCandidates contains those not assigned in Stage 2.
+    tempWaitingList.push(...overflowCandidates.map(player => ({
         alliance: player[ALLIANCE],
         player: player[PLAYER],
         speedups: {
@@ -882,8 +881,8 @@ function calculateScheduleData(players, errors = []) {
     assignInitialMinisters(researchDay, researchList, RESEARCH, 'researchAssignments', schedulerData, tempWaitingList);
 
     // Advisor assignment for Day 4 (Two Stages, Two Rounds each)
-    const advisorList = filtered.filter(player => player[SOLDIER_TRAINING] >= minHours);
-    scheduleTrainingDay(advisorList, minHours, schedulerData, tempWaitingList);
+    const trainingList = filtered.filter(player => player[SOLDIER_TRAINING] >= minHours);
+    scheduleTrainingDay(trainingList, minHours, schedulerData, tempWaitingList);
 
     // Consolidate waiting list
     const consolidatedWaitingList = [];

@@ -579,7 +579,7 @@
          * Initializes the visibility states of tables from localStorage.
          */
         function initTableStates() {
-             const tables = ['day1MinisterTable', 'day1NobleTable', 'day2MinisterTable', 'day2NobleTable', 'day3MinisterTable', 'day4NobleTable', 'day4MinisterTable', 'day5MinisterTable', 'day5NobleTable'];
+             const tables = ['day1MinisterTable', 'day1NobleTable', 'day2MinisterTable', 'day2NobleTable', 'day4NobleTable', 'day4MinisterTable', 'day5MinisterTable', 'day5NobleTable'];
             tables.forEach(tableId => {
                 const button = document.getElementById('toggle' + tableId.charAt(0).toUpperCase() + tableId.slice(1).replace('Table', ''));
                 const isVisible = localStorage.getItem(tableId + 'Visible') !== 'false';
