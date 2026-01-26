@@ -574,7 +574,18 @@ function populateTable(tableId, appointments) {
         appointments.forEach(appointment => {
             const row = tbody.insertRow();
             row.insertCell(0).textContent = `${appointment.start}–${appointment.end}`;
-            row.insertCell(1).textContent = `${appointment.alliance}/${appointment.player}`;
+            const playerCell = row.insertCell(1);
+            playerCell.textContent = `${appointment.alliance}/${appointment.player}`;
+            // Add tooltip with detailed player info on hover
+            const player = schedulerData.processedPlayers.find(p => p[PLAYER] === appointment.player && p[ALLIANCE] === appointment.alliance);
+            if (player) {
+                const timeSlots = player.availableTimeRanges && player.availableTimeRanges.length > 0
+                    ? player.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ')
+                    : 'No available ranges';
+                playerCell.title = `${appointment.alliance}/${appointment.player} - T:${Math.round(player[SOLDIER_TRAINING])} C:${Math.round(player[CONSTRUCTION])} R:${Math.round(player[RESEARCH])} TG:${Math.round(player[TRUEGOLD_PIECES])} - Time Slots: ${timeSlots}`;
+            } else {
+                playerCell.title = 'Player details unavailable';
+            }
             row.insertCell(2).textContent = appointment.speedups;
             if (!tableId.includes('Noble')) {
                 row.insertCell(3).textContent = appointment.truegold;
