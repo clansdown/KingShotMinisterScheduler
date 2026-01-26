@@ -384,66 +384,92 @@ function scheduleTrainingDay(players, minHours, schedulerData) {
 
 
 /**
- * Assigns players from waiting lists to the spillover day minister slots.
- * Aggregates waiting lists from construction king day, research king day, and training day (day 4),
- * excluding the spillover day itself, and assigns available players to open minister slots.
- * Modifies schedulerData in place (assignments and assignment flags).
+ * Assigns players from waiting lists or optional players to the spillover day minister slots.
+ * Adds unscheduled players to the spillover waiting list in all cases.
  * @param {SchedulerData} schedulerData - Main data object.
- * @param {number} spilloverDay - The day number to assign spillover players to (e.g., 5).
+ * @param {number} spilloverDay - The day number to assign spillover players to.
+ * @param {Array<WaitingPlayer>} [players=null] - Optional array of WaitingPlayer objects to schedule. Must include properties: alliance, player, speedups (object with soldier/construction/research), truegold, timeSlots.
  */
-function scheduleSpilloverDay(schedulerData, spilloverDay) {
+/** @typedef {WaitingPlayer & {originalDay?: number}} SpilloverCandidate */
+function scheduleSpilloverDay(schedulerData, spilloverDay, players = null) {
     const constructDay = schedulerData.constructionKingDay;
     const researchDay = schedulerData.researchKingDay;
+    /** @type {Array<SpilloverCandidate>} */
+    let candidates;
 
-    // Aggregate waiting lists for spillover (only from king/training days, excluding spillover day)
-    const spilloverCandidates = [];
-    const seenPlayers = new Set();
-    [constructDay, researchDay, 4].forEach(sourceDay => {
-        if (sourceDay !== spilloverDay && schedulerData.waitingLists[sourceDay]) {
-            schedulerData.waitingLists[sourceDay].forEach(player => {
-                const key = `${player.alliance}/${player.player}`;
-                if (!seenPlayers.has(key)) {
-                    seenPlayers.add(key);
-                    spilloverCandidates.push({ ...player, originalDay: sourceDay });
-                }
-            });
-        }
-    });
+    if (players) {
+        candidates = players;
+    } else {
+        // Exact original aggregation logic
+        /** @type {Array<SpilloverCandidate>} */
+        const spilloverCandidates = [];
+        /** @type {Set<string>} */
+        const seenPlayers = new Set();
+        [constructDay, researchDay, 4].forEach(sourceDay => {
+            if (sourceDay !== spilloverDay && schedulerData.waitingLists[sourceDay]) {
+                schedulerData.waitingLists[sourceDay].forEach(player => {
+                    const key = `${player.alliance}/${player.player}`;
+                    if (!seenPlayers.has(key)) {
+                        seenPlayers.add(key);
+                        spilloverCandidates.push({ ...player, originalDay: sourceDay });
+                    }
+                });
+            }
+        });
+        candidates = spilloverCandidates;
+    }
 
-    // Assign spillover candidates to spillover day
-    const day = spilloverDay;
-    const taken = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
+    // Exact original assignment logic (unchanged)
+    /** @type {Set<string>} */
+    const taken = new Set(schedulerData.assignments[spilloverDay].ministers.map(a => a.start));
+    /** @type {Array<TimeRange>} */
     const slots = generateTimeSlots();
+    /** @type {Array<SpilloverCandidate>} */
+    const unscheduled = [];  // Track for universal waiting list addition
 
-    spilloverCandidates.forEach(waitingPlayer => {
-        const playerId = `${waitingPlayer.player}-${waitingPlayer.alliance}`;
-        // Skip if already assigned for construction or research
-        if (schedulerData.constructionAssignments[playerId] && schedulerData.researchAssignments[playerId]) return;
-
-        const player = schedulerData.processedPlayers.find(p => p[PLAYER] === waitingPlayer.player && p[ALLIANCE] === waitingPlayer.alliance);
+    candidates.forEach(candidate => {
+        const playerId = `${candidate.player}-${candidate.alliance}`;
+        let assigned = false;
+        const player = schedulerData.processedPlayers.find(p => p[PLAYER] === candidate.player && p[ALLIANCE] === candidate.alliance);
         if (!player) return;
 
         for (const slot of slots) {
             if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
-                schedulerData.assignments[day].ministers.push({
-                    start: slot.start,
-                    end: slot.end,
-                    alliance: waitingPlayer.alliance,
-                    player: waitingPlayer.player,
-                    speedups: `${Math.round(waitingPlayer.speedups.construction)} / ${Math.round(waitingPlayer.speedups.research)}`,
-                    truegold: waitingPlayer.truegold
-                });
-                if (!schedulerData.constructionAssignments[playerId]) {
-                    schedulerData.constructionAssignments[playerId] = true;
+                if (!(schedulerData.constructionAssignments[playerId] && schedulerData.researchAssignments[playerId])) {
+                    // Exact push and flag update as original
+                    schedulerData.assignments[spilloverDay].ministers.push({
+                        start: slot.start,
+                        end: slot.end,
+                        alliance: candidate.alliance,
+                        player: candidate.player,
+                        speedups: `${Math.round(candidate.speedups.construction)} / ${Math.round(candidate.speedups.research)}`,
+                        truegold: candidate.truegold
+                    });
+                    if (!schedulerData.constructionAssignments[playerId]) schedulerData.constructionAssignments[playerId] = true;
+                    if (!schedulerData.researchAssignments[playerId]) schedulerData.researchAssignments[playerId] = true;
+                    taken.add(slot.start);
+                    assigned = true;
+                    break;
                 }
-                if (!schedulerData.researchAssignments[playerId]) {
-                    schedulerData.researchAssignments[playerId] = true;
-                }
-                taken.add(slot.start);
-                break;
             }
         }
+        if (!assigned) {
+            unscheduled.push(candidate);  // Collect in all cases
+        }
     });
+
+    // Universal addition: Add unscheduled to waiting list in all cases
+    if (unscheduled.length > 0) {
+        /** @type {Array<WaitingPlayer>} */
+        const toAdd = unscheduled.map(candidate => ({
+            alliance: candidate.alliance,
+            player: candidate.player,
+            speedups: { soldier: candidate.speedups.soldier, construction: candidate.speedups.construction, research: candidate.speedups.research },
+            truegold: candidate.truegold,
+            timeSlots: candidate.timeSlots
+        }));
+        schedulerData.waitingLists[spilloverDay].push(...toAdd);
+    }
 }
 
 
