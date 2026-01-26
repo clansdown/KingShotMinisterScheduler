@@ -618,13 +618,11 @@ function scheduleNobleAdvisors(playerList, minHours, schedulerData, assignments,
  * @param {Array<WaitingPlayer>} waiting - Array of waiting player objects.
  */
 function updateScheduleTables(assignments, waiting) {
-    const days = [1, 2, 3, 4, 5];
+    const days = [1, 2, 4, 5];
     days.forEach(day => {
         assignments[day].ministers.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
         populateTable(`day${day}MinisterTable`, assignments[day].ministers);
         if (day !== 3) {
-            assignments[day].advisors.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
-            populateTable(`day${day}NobleTable`, assignments[day].advisors);
             // Hide second table section if empty
             const secondSectionId = day === 4 ? `day${day}MinisterSection` : `day${day}NobleSection`;
             const secondAppointments = day === 4 ? assignments[day].ministers : assignments[day].advisors;
@@ -988,47 +986,7 @@ function calculateScheduleData(players, errors = []) {
         }
     }
 
-    // Last Resort: Day 3 Minister Assignment
-    // Sort remaining waiting list by Sum of All Speedups descending
-    consolidatedWaitingList.sort((a, b) => {
-        const playerA = filtered.find(p => p[PLAYER] === a.player && p[ALLIANCE] === a.alliance);
-        const playerB = filtered.find(p => p[PLAYER] === b.player && p[ALLIANCE] === b.alliance);
-        if (!playerA || !playerB) return 0;
-        return getAllSpeedupsSum(playerB) - getAllSpeedupsSum(playerA);
-    });
-
-    for (const waitingPlayer of consolidatedWaitingList.slice()) {
-        const playerId = `${waitingPlayer.player}-${waitingPlayer.alliance}`;
-        const player = filtered.find(p => p[PLAYER] === waitingPlayer.player && p[ALLIANCE] === waitingPlayer.alliance);
-        if (!player) continue;
-
-        if ((waitingPlayer.speedups.construction + waitingPlayer.speedups.research) < minHours) continue;
-
-        const day = 3;
-        const taken = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
-        const slots = generateTimeSlots();
-
-        for (const slot of slots) {
-            if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
-                schedulerData.assignments[day].ministers.push({
-                    start: slot.start,
-                    end: slot.end,
-                    alliance: waitingPlayer.alliance,
-                    player: waitingPlayer.player,
-                    speedups: `${Math.round(waitingPlayer.speedups.construction)} / ${Math.round(waitingPlayer.speedups.research)}`,
-                    truegold: waitingPlayer.truegold
-                });
-                schedulerData.constructionAssignments[playerId] = true;
-                schedulerData.researchAssignments[playerId] = true;
-                schedulerData.trainingAssignments[playerId] = true;
-                consolidatedWaitingList.splice(consolidatedWaitingList.indexOf(waitingPlayer), 1);
-                break;
-            }
-        }
-    }
-
-    // Note: Old Step 4 (Advisor Overflow to Day 4 Minister) is now handled inside scheduleTrainingDay as Stage 2.
-    // So we don't need it here.
+    
 
     // Set global waiting list
     schedulerData.waitingList = consolidatedWaitingList;

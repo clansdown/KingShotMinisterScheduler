@@ -184,14 +184,20 @@ function parseCsvToObjects(csvText) {
         // Convert numeric fields and validate
         const numericFields = [GENERAL_SPEEDUPS, SOLDIER_TRAINING, CONSTRUCTION, RESEARCH, TRUEGOLD_PIECES];
         numericFields.forEach(field => {
-            const val = parseFloat(player[field]);
+            const originalVal = player[field].trim();
+            const lowerVal = originalVal.toLowerCase();
+            if (lowerVal === 'na' || lowerVal === 'n/a') {
+                player[field] = 0;
+                return;
+            }
+            const val = parseFloat(originalVal);
             if (isNaN(val)) {
-                 if (player[field] && isNaN(parseFloat(player[field]))) {
-                     errors.push(`Line ${lineNumber}: Invalid number in '${field}' field: "${player[field]}". Raw line: "${rawLine}"`);
-                     lineHasError = true;
+                 if (originalVal) {
+                      errors.push(`Line ${lineNumber}: Invalid number in '${field}' field: "${originalVal}". Raw line: "${rawLine}"`);
+                      lineHasError = true;
                  }
             }
-            player[field] = parseFloat(player[field]) || 0;
+            player[field] = val || 0;
         });
 
         if (lineHasError) continue;
