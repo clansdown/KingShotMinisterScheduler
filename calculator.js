@@ -323,7 +323,8 @@ function scheduleTrainingDay(players, minHours, schedulerData, tempWaitingList) 
     // Finalize Advisor Assignments
     const takenAdvisor = new Set(schedulerData.assignments[day].advisors.map(a => a.start));
     assignedAdvisorSlots.forEach(({ player, slot }) => {
-        const app = {
+        // console.log(`Assigning Noble Advisor: ${player[PLAYER]} (${player[ALLIANCE]}) to ${slot.start}-${slot.end} with ${player[SOLDIER_TRAINING]} hours`);
+        const appointment = {
             start: slot.start,
             end: slot.end,
             alliance: player[ALLIANCE],
@@ -332,7 +333,7 @@ function scheduleTrainingDay(players, minHours, schedulerData, tempWaitingList) 
             truegold: player[TRUEGOLD_PIECES],
             rawSpeedup: player[SOLDIER_TRAINING]
         };
-        schedulerData.assignments[day].advisors.push(app);
+        schedulerData.assignments[day].advisors.push(appointment);
         const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
         schedulerData.trainingAssignments[playerId] = true;
         takenAdvisor.add(slot.start);
@@ -613,19 +614,25 @@ function scheduleNobleAdvisors(playerList, minHours, schedulerData, assignments,
 
 /**
  * Updates the schedule tables and waiting list in the UI.
+ * Populates minister tables for days 1, 2, 4, 5 and noble advisor tables for the same days.
  * @param {Assignments} assignments - Object with day keys and role-specific appointment arrays.
  * @param {Array<WaitingPlayer>} waiting - Array of waiting player objects.
  */
 function updateScheduleTables(assignments, waiting) {
     const days = [1, 2, 4, 5];
     days.forEach(day => {
-        assignments[day].ministers.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
-        populateTable(`day${day}MinisterTable`, assignments[day].ministers);
+        if (assignments[day] && assignments[day].ministers) {
+            assignments[day].ministers.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+            populateTable(`day${day}MinisterTable`, assignments[day].ministers);
+        }
+        if (assignments[day] && assignments[day].advisors) {
+            assignments[day].advisors.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+            populateTable(`day${day}NobleTable`, assignments[day].advisors);
+        }
         if (day !== 3) {
-            // Hide second table section if empty
             const secondSectionId = day === 4 ? `day${day}MinisterSection` : `day${day}NobleSection`;
             const secondAppointments = day === 4 ? assignments[day].ministers : assignments[day].advisors;
-            if (secondAppointments.length === 0) {
+            if (secondAppointments && secondAppointments.length === 0) {
                 document.getElementById(secondSectionId).style.display = 'none';
             }
         }
