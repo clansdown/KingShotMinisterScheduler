@@ -658,13 +658,13 @@ function populateTable(tableId, appointments) {
         const day = dayMatch ? parseInt(dayMatch[1]) : 0;
         const role = tableId.includes('Minister') ? 'ministers' : 'advisors';
 
-        appointments.forEach(app => {
+        appointments.forEach(appointment => {
             const row = tbody.insertRow();
-            row.insertCell(0).textContent = `${app.start}–${app.end}`;
-            row.insertCell(1).textContent = `${app.alliance}/${app.player}`;
-            row.insertCell(2).textContent = app.speedups;
+            row.insertCell(0).textContent = `${appointment.start}–${appointment.end}`;
+            row.insertCell(1).textContent = `${appointment.alliance}/${appointment.player}`;
+            row.insertCell(2).textContent = appointment.speedups;
             if (!tableId.includes('Noble')) {
-                row.insertCell(3).textContent = app.truegold;
+                row.insertCell(3).textContent = appointment.truegold;
             }
             
             // Actions Column
@@ -674,11 +674,11 @@ function populateTable(tableId, appointments) {
             const reassignBtn = document.createElement('button');
             reassignBtn.className = 'btn btn-sm btn-outline-primary me-1';
             reassignBtn.textContent = '🔃';
-            reassignBtn.onclick = () => openAssignmentModal(app.alliance, app.player, {
+            reassignBtn.onclick = () => openAssignmentModal(appointment.alliance, appointment.player, {
                 day: day,
                 role: role,
-                existingSlotStart: app.start,
-                existingSlotEnd: app.end
+                existingSlotStart: appointment.start,
+                existingSlotEnd: appointment.end
             });
             actionsCell.appendChild(reassignBtn);
             
@@ -687,7 +687,7 @@ function populateTable(tableId, appointments) {
             removeBtn.className = 'btn btn-sm btn-outline-danger';
             removeBtn.innerHTML = '&#10060;'; // Unicode X
             removeBtn.title = 'Remove Assignment';
-            removeBtn.onclick = () => removeAssignment(day, role, app.start, app.alliance, app.player);
+            removeBtn.onclick = () => removeAssignment(day, role, appointment.start, appointment.alliance, appointment.player);
             actionsCell.appendChild(removeBtn);
         });
     }
