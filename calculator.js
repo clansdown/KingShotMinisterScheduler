@@ -106,6 +106,297 @@ const CATEGORY_CONSTRUCTION = 'construction';
 const CATEGORY_RESEARCH = 'research';
 
 /**
+ * Calculates total available minutes from a player's time ranges.
+ * @param {PlayerObject} player - The player object.
+ * @returns {number} Total minutes available.
+ */
+function getTotalAvailableMinutes(player) {
+    if (!player.availableTimeRanges || player.availableTimeRanges.length === 0) return 0;
+    return player.availableTimeRanges.reduce((sum, range) => {
+        let start = timeToMinutes(range.start);
+        let end = timeToMinutes(range.end);
+        if (end < start) end += 1440; // Handle overnight ranges crossing midnight
+        return sum + (end - start);
+    }, 0);
+}
+
+/**
+ * Calculates the sum of all speedups (soldier training + construction + research).
+ * @param {PlayerObject} player - The player object.
+ * @returns {number} Sum of all speedups.
+ */
+function getAllSpeedupsSum(player) {
+    return (player[SOLDIER_TRAINING] || 0) + (player[CONSTRUCTION] || 0) + (player[RESEARCH] || 0);
+}
+
+/**
+ * Performs the first pass of greedy assignment for initial scheduling Round 1: Sorts players by shortest available time, then assigns to the first available fitting slot based on availability.
+ * This function ONLY handles the assignment logic; day-specific updates (flags, appointments, taken sets) MUST be batched by the caller after calling.
+ * 
+ * Usage Instructions for Caller:
+ * 1. Prepare unscheduled: Array of players to consider (e.g., players.slice()).
+ * 2. Prepare assignedPlayerSlots: Empty array [] to accumulate {player, slot}.
+ * 3. Prepare slots: Immutable array of slots to check (e.g., generateTimeSlots()).
+ * 4. Call: assignFirstPass(unscheduled, slots, assignedPlayerSlots);
+ * 5. After call: assignedPlayerSlots contains new assignments; unscheduled has removed assigned players (ready for Round 2 if using performDisplacement).
+ *    Iterate over assignedPlayerSlots to update scheduler state (e.g., create Appointment objects with day/role fields, push to schedulerData.assignments[day][role], set flags like trainingAssignments[playerId] = true, add to taken sets).
+ *    Do NOT perform these updates inside this function—batch them externally for specificity.
+ * 
+ * Mutation Notes: Mutates unscheduled (removes assigned players) and assignedPlayerSlots (adds assignments); relies on slot availability checks (no evaluator).
+ * 
+ * @param {Array<PlayerObject>} unscheduled - Mutable array of players to assign (will be sorted and have assigned players removed).
+ * @param {Array<{start: string, end: string}>} slots - Immutable array of slot objects to check for availability.
+ * @param {Array<{player: PlayerObject, slot: {start: string, end: string}}>} assignedPlayerSlots - Mutable accumulator array for new assignments as {player, slot}.
+ */
+function assignFirstPass(unscheduled, slots, assignedPlayerSlots) {
+    // Sort unscheduled by shortest available time
+    unscheduled.sort((a, b) => getTotalAvailableMinutes(a) - getTotalAvailableMinutes(b));
+    
+    // Assign greedily
+    for (let i = 0; i < unscheduled.length; i++) {
+        const candidate = unscheduled[i];
+        const slot = slots.find(s => 
+            !assignedPlayerSlots.some(ap => ap.slot.start === s.start) && 
+            isSlotAvailable(candidate, s.start, s.end)
+        );
+        if (slot) {
+            assignedPlayerSlots.push({ player: candidate, slot });
+            unscheduled.splice(i, 1);
+            i--; // Adjust index after removal
+        }
+    }
+}
+
+/**
+ * Performs displacement optimization for scheduling Round 2 (generic for any role/day).
+ * This function only handles player swapping between unassigned and assigned lists; it does NOT update schedulerData flags, taken sets, appointment creation, or any other day/role-specific state.
+ * It assumes the caller has already prepared assignedPlayerSlots from Round 1's greedy assignment.
+ * 
+ * Usage Instructions for Caller:
+ * 1. Before calling: Prepare `assignedPlayerSlots` (Array<{player: PlayerObject, slot: {start: string, end: string}}>) from Round 1's assignment results.
+ *    Generate slots via generateTimeSlots(), assign first available to eligible players via isSlotAvailable(), and push {player, slot} to the array.
+ * 2. Prepare unscheduled (Array<PlayerObject>) from leftover players after Round 1.
+ * 3. Call: performDisplacement(unscheduled, assignedPlayerSlots, evaluator); Note: evaluator is (player) => number (higher is better, e.g., (p) => p[CONSTRUCTION]).
+ * 4. After returned displacements, iterate over final assignedPlayerSlots and final unscheduled to update scheduler state:
+ *    - For each in assignedPlayerSlots: Create Appointment object with day/role-specific fields (e.g., speedups, truegold), push to schedulerData.assignments[day][role], update flags (e.g., schedulerData.constructionAssignments[playerId] = true), remove/update taken sets.
+ *    - The caller is responsible for marking the player as assigned for this day (no auto-updates in this function).
+ *    - Process displacements if needed (though they are reflected in the mutated lists).
+ *    - Do NOT perform these updates inside this function; batch them externally for day/role specificity.
+ * 
+ * Note: Mutates unscheduled and assignedPlayerSlots in-place. Returns displacements for logging/inspection, but primary effect is list mutations.
+ * 
+ * @param {Array<PlayerObject>} unscheduled - Mutable array of unscheduled players (sorted and modified in-place: removes assigned candidates, adds back displaced ones).
+ * @param {Array<{player: PlayerObject, slot: {start: string, end: string}}>} assignedPlayerSlots - Mutable array of currently assigned {player, slot} objects (modified: replaced displaced players with candidates in-place).
+ * @param {Function} evaluator - Function to evaluate a player's value: (player) => number (higher values are better; used for sorting and displacement comparison).
+ * @returns {Array<{candidate: PlayerObject, displaced: PlayerObject, slot: {start: string, end: string}}>} List of displacement actions performed (for caller inspection; mutations handle the list changes).
+ */
+function performDisplacement(unscheduled, assignedPlayerSlots, evaluator) {
+    const displacements = [];
+    let changed = true;
+    while (changed && unscheduled.length > 0) {
+        changed = false;
+        
+        // Sort unscheduled using evaluator (descending: higher value first)
+        unscheduled.sort((a, b) => evaluator(b) - evaluator(a));
+        
+        for (let i = 0; i < unscheduled.length; i++) {
+            const candidate = unscheduled[i];
+            const candidateValue = evaluator(candidate);
+            
+            // Find the best displacement target (lowest value among assigned players available in their slot)
+            let bestTargetIndex = -1;
+            let minTargetValue = Infinity;
+            
+            for (let j = 0; j < assignedPlayerSlots.length; j++) {
+                const assigned = assignedPlayerSlots[j];
+                if (!isSlotAvailable(candidate, assigned.slot.start, assigned.slot.end)) continue;
+                
+                const targetValue = evaluator(assigned.player);
+                if (targetValue < minTargetValue) {
+                    minTargetValue = targetValue;
+                    bestTargetIndex = j;
+                }
+            }
+            
+            if (bestTargetIndex === -1 || candidateValue <= minTargetValue) continue;
+            
+            // Perform displacement: swap players, record displacement
+            const displacedPlayer = assignedPlayerSlots[bestTargetIndex].player;
+            const displacedSlot = assignedPlayerSlots[bestTargetIndex].slot;
+            
+            // Update lists: remove displaced from assignedPlayerSlots, add candidate with same slot, remove candidate from unscheduled, add displaced to unscheduled
+            assignedPlayerSlots[bestTargetIndex] = { player: candidate, slot: displacedSlot };
+            unscheduled.splice(i, 1);
+            unscheduled.push(displacedPlayer);
+            
+            displacements.push({ candidate, displaced: displacedPlayer, slot: displacedSlot });
+            
+            changed = true;
+            break; // Re-sort for next iteration
+        }
+    }
+    return displacements;
+}
+
+/**
+ * Assigns initial ministers for a specific King/Queen day using a two-round process.
+ * Round 1: Sort by shortest available time, assign to first available slot.
+ * Round 2: Displace scheduled players with fewer relevant speedups if a waiting player has more.
+ * @param {number} day - The day number (1 or 2).
+ * @param {Array<PlayerObject>} players - Array of eligible players.
+ * @param {string} speedupProp - Property name for relevant speedup (CONSTRUCTION or RESEARCH).
+ * @param {string} assignmentFlag - Flag property in schedulerData (e.g., 'constructionAssignments').
+ * @param {SchedulerData} schedulerData - Main data object.
+ * @param {Array<WaitingPlayer>} tempWaitingList - Array to push unassigned players to.
+ */
+function assignInitialMinisters(day, players, speedupProp, assignmentFlag, schedulerData, tempWaitingList) {
+    // Round 1: Greedy Assignment (using assignFirstPass)
+    const unscheduled = players.slice(); // Copy to mutate
+    const slots = generateTimeSlots();
+    const assignedPlayerSlots = []; 
+    
+    // Check for pre-existing assignments (if any logic added assignments before this)
+    // Filter unscheduled to remove already assigned (should be handled by caller passing eligible players, but safety check)
+    // Actually, assignFirstPass handles sorting and assignment.
+    // However, if players array contains already-assigned players (via other flags), we should filter them first?
+    // The previous implementation checked `if (schedulerData[assignmentFlag][playerId]) continue`.
+    // Let's filter unscheduled first.
+    for (let i = unscheduled.length - 1; i >= 0; i--) {
+        const p = unscheduled[i];
+        if (schedulerData[assignmentFlag][`${p[PLAYER]}-${p[ALLIANCE]}`]) {
+            unscheduled.splice(i, 1);
+        }
+    }
+
+    assignFirstPass(unscheduled, slots, assignedPlayerSlots);
+
+    // Round 2: Displacement
+    performDisplacement(unscheduled, assignedPlayerSlots, (p) => p[speedupProp]);
+
+    // Finalize Assignments
+    const taken = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
+    
+    assignedPlayerSlots.forEach(({ player, slot }) => {
+         const appointment = {
+            start: slot.start,
+            end: slot.end,
+            alliance: player[ALLIANCE],
+            player: player[PLAYER],
+            speedups: `${Math.round(player[speedupProp])}`,
+            truegold: player[TRUEGOLD_PIECES],
+            rawSpeedup: player[speedupProp] 
+        };
+        schedulerData.assignments[day].ministers.push(appointment);
+        const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
+        schedulerData[assignmentFlag][playerId] = true;
+        taken.add(slot.start);
+    });
+
+    // Add remaining unscheduled to tempWaitingList
+    tempWaitingList.push(...unscheduled.map(player => ({
+        alliance: player[ALLIANCE],
+        player: player[PLAYER],
+        speedups: {
+            soldier: Math.round(player[SOLDIER_TRAINING]),
+            construction: Math.round(player[CONSTRUCTION]),
+            research: Math.round(player[RESEARCH])
+        },
+        truegold: Math.round(player[TRUEGOLD_PIECES]),
+        timeSlots: player.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ') || 'No available ranges'
+    })));
+}
+
+/**
+ * Schedules the training day (Day 4) fulfilling soldier training quotas.
+ * Prioritizes Noble Advisors, overflows to Chief Ministers.
+ * Each stage uses two rounds: shortest time slots first, then displacement.
+ * @param {Array<PlayerObject>} players - Array of eligible players (soldier training >= minHours).
+ * @param {number} minHours - Minimum hours.
+ * @param {SchedulerData} schedulerData - Main data object.
+ * @param {Array<WaitingPlayer>} tempWaitingList - Array to push unassigned to.
+ */
+function scheduleTrainingDay(players, minHours, schedulerData, tempWaitingList) {
+    const day = 4;
+    const advisorSlots = generateTimeSlots();
+    const ministerSlots = generateTimeSlots(); // Independent slots for overflow
+    
+    // --- STAGE 1: Noble Advisors ---
+    
+    let unscheduledForAdvisor = players.filter(p => !schedulerData.trainingAssignments[`${p[PLAYER]}-${p[ALLIANCE]}`]);
+    const assignedAdvisorSlots = [];
+
+    // Round 1: Greedy Assignment
+    assignFirstPass(unscheduledForAdvisor, advisorSlots, assignedAdvisorSlots);
+
+    // Round 2: Advisor Displacement
+    performDisplacement(unscheduledForAdvisor, assignedAdvisorSlots, (p) => p[SOLDIER_TRAINING]);
+    
+    // Finalize Advisor Assignments
+    const takenAdvisor = new Set(schedulerData.assignments[day].advisors.map(a => a.start));
+    assignedAdvisorSlots.forEach(({ player, slot }) => {
+        const app = {
+            start: slot.start,
+            end: slot.end,
+            alliance: player[ALLIANCE],
+            player: player[PLAYER],
+            speedups: Math.round(player[SOLDIER_TRAINING]),
+            truegold: player[TRUEGOLD_PIECES],
+            rawSpeedup: player[SOLDIER_TRAINING]
+        };
+        schedulerData.assignments[day].advisors.push(app);
+        const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
+        schedulerData.trainingAssignments[playerId] = true;
+        takenAdvisor.add(slot.start);
+    });
+
+    // --- STAGE 2: Chief Minister Overflow ---
+    // Candidates: Players qualified for advisor (training >= minHours) but NOT assigned as advisor
+    
+    let overflowCandidates = players.filter(p => !schedulerData.trainingAssignments[`${p[PLAYER]}-${p[ALLIANCE]}`]);
+    let unscheduledOverflow = overflowCandidates.filter(p => !schedulerData.researchAssignments[`${p[PLAYER]}-${p[ALLIANCE]}`]);
+    const assignedMinisterSlots = [];
+
+    // Round 1: Greedy Assignment for Overflow
+    assignFirstPass(unscheduledOverflow, ministerSlots, assignedMinisterSlots);
+
+    // Round 2: Minister Overflow Displacement (Displace if Training > C+R)
+    performDisplacement(unscheduledOverflow, assignedMinisterSlots, (p) => p[SOLDIER_TRAINING]);
+
+    // Finalize Minister Overflow Assignments
+    const takenMinister = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
+    assignedMinisterSlots.forEach(({ player, slot }) => {
+        const app = {
+            start: slot.start,
+            end: slot.end,
+            alliance: player[ALLIANCE],
+            player: player[PLAYER],
+            speedups: `${Math.round(player[CONSTRUCTION])} / ${Math.round(player[RESEARCH])}`,
+            truegold: player[TRUEGOLD_PIECES],
+            rawSpeedupSum: player[CONSTRUCTION] + player[RESEARCH]
+        };
+        schedulerData.assignments[day].ministers.push(app);
+        const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
+        schedulerData.researchAssignments[playerId] = true;
+        takenMinister.add(slot.start);
+    });
+
+    // Add remaining unassigned to waiting list
+    // unscheduledOverflow contains those not assigned in Stage 2.
+    tempWaitingList.push(...unscheduledOverflow.map(player => ({
+        alliance: player[ALLIANCE],
+        player: player[PLAYER],
+        speedups: {
+            soldier: Math.round(player[SOLDIER_TRAINING]),
+            construction: Math.round(player[CONSTRUCTION]),
+            research: Math.round(player[RESEARCH])
+        },
+        truegold: Math.round(player[TRUEGOLD_PIECES]),
+        timeSlots: player.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ') || 'No available ranges'
+    })));
+}
+
+
+/**
  * Parses a CSV text into an array of objects, handling quoted fields and auto-detecting delimiter (comma or tab).
  * @param {string} csvText - The raw CSV text from the file.
  * @returns {{players: Array<PlayerObject>, errors: Array<string>}} Object containing array of player objects and array of error strings.
@@ -784,83 +1075,17 @@ function calculateScheduleData(players, errors = []) {
     });
     const tempWaitingList = [];
 
-    // Construction buff assignment
-    const constructionList = filtered.filter(player => player[CONSTRUCTION] >= minHours).sort((a, b) => b[CONSTRUCTION] - a[CONSTRUCTION]);
-    for (const player of constructionList) {
-        const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
-        if (schedulerData.constructionAssignments[playerId]) {
-            continue;
-        }
-        const taken = new Set(schedulerData.assignments[constructDay].ministers.map(a => a.start));
-        const slots = generateTimeSlots();
-        for (const slot of slots) {
-            if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
-                schedulerData.assignments[constructDay].ministers.push({
-                    start: slot.start,
-                    end: slot.end,
-                    alliance: player[ALLIANCE],
-                    player: player[PLAYER],
-                    speedups: `${Math.round(player[CONSTRUCTION])}`,
-                    truegold: player[TRUEGOLD_PIECES]
-                });
-                taken.add(slot.start);
-                schedulerData.constructionAssignments[playerId] = true;
-                break;
-            }
-        }
-    }
-    tempWaitingList.push(...constructionList.filter(player => !schedulerData.constructionAssignments[`${player[PLAYER]}-${player[ALLIANCE]}`]).map(player => ({
-        alliance: player[ALLIANCE],
-        player: player[PLAYER],
-        speedups: {
-            soldier: Math.round(player[SOLDIER_TRAINING]),
-            construction: Math.round(player[CONSTRUCTION]),
-            research: Math.round(player[RESEARCH])
-        },
-        truegold: Math.round(player[TRUEGOLD_PIECES]),
-        timeSlots: player.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ') || 'No available ranges'
-    })));
+    // Construction buff assignment (Initial Two-Round)
+    const constructionList = filtered.filter(player => player[CONSTRUCTION] >= minHours);
+    assignInitialMinisters(constructDay, constructionList, CONSTRUCTION, 'constructionAssignments', schedulerData, tempWaitingList);
 
-    // Research buff assignment
-    const researchList = filtered.filter(player => player[RESEARCH] >= minHours).sort((a, b) => b[RESEARCH] - a[RESEARCH]);
-    for (const player of researchList) {
-        const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
-        if (schedulerData.researchAssignments[playerId]) {
-            continue;
-        }
-        const taken = new Set(schedulerData.assignments[researchDay].ministers.map(a => a.start));
-        const slots = generateTimeSlots();
-        for (const slot of slots) {
-            if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
-                schedulerData.assignments[researchDay].ministers.push({
-                    start: slot.start,
-                    end: slot.end,
-                    alliance: player[ALLIANCE],
-                    player: player[PLAYER],
-                    speedups: `${Math.round(player[RESEARCH])}`,
-                    truegold: player[TRUEGOLD_PIECES]
-                });
-                taken.add(slot.start);
-                schedulerData.researchAssignments[playerId] = true;
-                break;
-            }
-        }
-    }
-    tempWaitingList.push(...researchList.filter(player => !schedulerData.researchAssignments[`${player[PLAYER]}-${player[ALLIANCE]}`]).map(player => ({
-        alliance: player[ALLIANCE],
-        player: player[PLAYER],
-        speedups: {
-            soldier: Math.round(player[SOLDIER_TRAINING]),
-            construction: Math.round(player[CONSTRUCTION]),
-            research: Math.round(player[RESEARCH])
-        },
-        truegold: Math.round(player[TRUEGOLD_PIECES]),
-        timeSlots: player.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ') || 'No available ranges'
-    })));
+    // Research buff assignment (Initial Two-Round)
+    const researchList = filtered.filter(player => player[RESEARCH] >= minHours);
+    assignInitialMinisters(researchDay, researchList, RESEARCH, 'researchAssignments', schedulerData, tempWaitingList);
 
-    // Advisor assignment for Day 4 with vector tempWaitingList vector
-    const advisorList = createAdvisorList(filtered.filter(player => player[SOLDIER_TRAINING] >= minHours));
-    scheduleNobleAdvisors(advisorList, minHours, schedulerData, schedulerData.assignments, tempWaitingList, 4);
+    // Advisor assignment for Day 4 (Two Stages, Two Rounds each)
+    const advisorList = filtered.filter(player => player[SOLDIER_TRAINING] >= minHours);
+    scheduleTrainingDay(advisorList, minHours, schedulerData, tempWaitingList);
 
     // Consolidate waiting list
     const consolidatedWaitingList = [];
@@ -874,96 +1099,109 @@ function calculateScheduleData(players, errors = []) {
     consolidatedWaitingList.push(...seenPlayers.values());
 
     // Assign consolidated WL to open CM slots on days 1,2,5
-    // Priority: Construction King Day -> Research King Day -> Other
-    const priorityDays = [constructDay, researchDay, 1, 2, 5].filter((v, i, a) => a.indexOf(v) === i && [1, 2, 5].includes(v)); // Ensure unique and valid
+    // Priority: Construction King Day -> Research King Day -> Other Day (1,2,or 5)
+    // The "Other Day" gets sorted by sum of ALL speedups before assignment.
+    const potentialDays = [1, 2, 5];
+    const otherDay = potentialDays.find(d => d !== constructDay && d !== researchDay);
+    const priorityDays = [constructDay, researchDay, otherDay].filter(d => d !== undefined); // Should always be defined
     
-    for (const waitingPlayer of consolidatedWaitingList.slice()) {
-        const playerId = `${waitingPlayer.player}-${waitingPlayer.alliance}`;
-        const player = filtered.find(p => p[PLAYER] === waitingPlayer.player && p[ALLIANCE] === waitingPlayer.alliance);
-        if (!player) continue;
+    // Iterate priority days. For 'otherDay', we sort the waiting list first.
+    // Since waiting list order matters for greedy assignment, we process each day separately.
+    
+    for (const day of priorityDays) {
+        // Clone and sort waiting list for this day's pass if it's the "other" day
+        let dailyWaitingList = [...consolidatedWaitingList];
+        
+        if (day === otherDay) {
+            dailyWaitingList.sort((a, b) => {
+                const playerA = filtered.find(p => p[PLAYER] === a.player && p[ALLIANCE] === a.alliance);
+                const playerB = filtered.find(p => p[PLAYER] === b.player && p[ALLIANCE] === b.alliance);
+                if (!playerA || !playerB) return 0;
+                return getAllSpeedupsSum(playerB) - getAllSpeedupsSum(playerA);
+            });
+        }
+        // Note: For King days, we keep the order from consolidatedWaitingList (which is roughly insertion order/random from previous phases).
+        // If specific order needed for King days spillover, current logic assumes "first come first served" or whatever consolidated order is.
+        // Original logic didn't sort spillover. So we only sort for 'otherDay'.
 
-        // Check availability against purpose: if construction assigned, don't try construction day
-        // But for "Other" days, we need to decide what flag to set.
-        // Logic: if assigning to constructDay, requires !constructionAssignments. 
-        // If researchDay, requires !researchAssignments.
-        // If other day, set based on day context (e.g. if day 1 is constr king, set constr). 
-        // Since we iterate priorityDays which are [constr, res, other], we can map day -> purpose.
+        // Iterate through candidates for this day
+        // We iterate on a copy or index to allow removal from main list if assigned?
+        // Actually, we should iterate the sorted list, try to assign, and if successful, remove from consolidatedWaitingList.
+        
+        for (const waitingPlayer of dailyWaitingList) {
+             // Skip if no longer in consolidated (already assigned in previous iteration of this loop or previous day loop?)
+             // Wait, dailyWaitingList is a snapshot. We need to check if still available.
+             if (!consolidatedWaitingList.includes(waitingPlayer)) continue;
 
-        for (const day of priorityDays) {
-            let canAssign = false;
-            let purposeToSet = '';
-            
-            if (day === constructDay) {
-                if (!schedulerData.constructionAssignments[playerId]) {
-                    canAssign = true;
-                    purposeToSet = 'constructionAssignments';
-                }
-            } else if (day === researchDay) {
-                if (!schedulerData.researchAssignments[playerId]) {
-                    canAssign = true;
-                    purposeToSet = 'researchAssignments';
-                }
-            } else {
-                // For non-king days in 1,2,5, assign if not assigned to corresponding king purpose?
-                // Or treat as generic minister? Requirements say: construction/research may NOT spill over to day 4.
-                // It implies 1,2,5 are safe. 
-                // Let's assume if we assign to day 1/2/5 non-king, we set the flag corresponding to that day's potential role or just construction?
-                // Actually, simply check if we can assign without violating purpose.
-                // If day 1 is construction king, assigning to day 1 sets constructionAssignments.
-                // If day 5 is neither, what do we set? 
-                // Let's stick to: try construction king day (set constr), try research king day (set res). 
-                // If there are other days (e.g. day 5), we can assign there. What flag to set? 
-                // Maybe set construction if day is closer to construction? 
-                // To be safe and simple: if assigning to day 5, set constructionAssignments as default fallback?
-                // Or check which flag is open. 
-                if (!schedulerData.constructionAssignments[playerId]) {
-                    canAssign = true;
-                    purposeToSet = 'constructionAssignments';
-                } else if (!schedulerData.researchAssignments[playerId]) {
-                    canAssign = true;
-                    purposeToSet = 'researchAssignments';
-                }
-            }
+             const playerId = `${waitingPlayer.player}-${waitingPlayer.alliance}`;
+             const player = filtered.find(p => p[PLAYER] === waitingPlayer.player && p[ALLIANCE] === waitingPlayer.alliance);
+             if (!player) continue;
 
-            if (!canAssign) continue;
+             let canAssign = false;
+             let purposeToSet = '';
 
-            const taken = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
-            const slots = generateTimeSlots();
-            
-            for (const slot of slots) {
-                if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
-                    schedulerData.assignments[day].ministers.push({
-                        start: slot.start,
-                        end: slot.end,
-                        alliance: waitingPlayer.alliance,
-                        player: waitingPlayer.player,
-                        speedups: `${Math.round(waitingPlayer.speedups.construction)} / ${Math.round(waitingPlayer.speedups.research)}`,
-                        truegold: waitingPlayer.truegold
-                    });
-                    schedulerData[purposeToSet][playerId] = true;
-                    consolidatedWaitingList.splice(consolidatedWaitingList.indexOf(waitingPlayer), 1);
-                    break;
-                }
-            }
-            // If assigned, break day loop for this player (one minister slot per pass? or can have multiple? 
-            // "people spilling over to the other of day 1, 2, 5 if they didn't get assigned during the first pass")
-            // Usually one assignment per list pass.
-            if (consolidatedWaitingList.indexOf(waitingPlayer) === -1) {
-                break;
-            }
+             if (day === constructDay) {
+                 if (!schedulerData.constructionAssignments[playerId]) {
+                     canAssign = true;
+                     purposeToSet = 'constructionAssignments';
+                 }
+             } else if (day === researchDay) {
+                 if (!schedulerData.researchAssignments[playerId]) {
+                     canAssign = true;
+                     purposeToSet = 'researchAssignments';
+                 }
+             } else {
+                 // Other day logic (Day 5 usually)
+                 // Assign if not already assigned for that day's implicit purpose?
+                 // Original logic: try set constr, else set res.
+                 if (!schedulerData.constructionAssignments[playerId]) {
+                     canAssign = true;
+                     purposeToSet = 'constructionAssignments';
+                 } else if (!schedulerData.researchAssignments[playerId]) {
+                     canAssign = true;
+                     purposeToSet = 'researchAssignments';
+                 }
+             }
+
+             if (!canAssign) continue;
+
+             const taken = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
+             const slots = generateTimeSlots();
+             
+             for (const slot of slots) {
+                 if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
+                     schedulerData.assignments[day].ministers.push({
+                         start: slot.start,
+                         end: slot.end,
+                         alliance: waitingPlayer.alliance,
+                         player: waitingPlayer.player,
+                         speedups: `${Math.round(waitingPlayer.speedups.construction)} / ${Math.round(waitingPlayer.speedups.research)}`,
+                         truegold: waitingPlayer.truegold
+                     });
+                     schedulerData[purposeToSet][playerId] = true;
+                     // Remove from main waiting list
+                     const idx = consolidatedWaitingList.indexOf(waitingPlayer);
+                     if (idx > -1) consolidatedWaitingList.splice(idx, 1);
+                     break;
+                 }
+             }
         }
     }
 
     // Last Resort: Day 3 Minister Assignment
-    // Separately assign qualified minister players still in WL to Day 3 minister slots.
-    // Set ALL three purpose flags.
+    // Sort remaining waiting list by Sum of All Speedups descending
+    consolidatedWaitingList.sort((a, b) => {
+        const playerA = filtered.find(p => p[PLAYER] === a.player && p[ALLIANCE] === a.alliance);
+        const playerB = filtered.find(p => p[PLAYER] === b.player && p[ALLIANCE] === b.alliance);
+        if (!playerA || !playerB) return 0;
+        return getAllSpeedupsSum(playerB) - getAllSpeedupsSum(playerA);
+    });
+
     for (const waitingPlayer of consolidatedWaitingList.slice()) {
         const playerId = `${waitingPlayer.player}-${waitingPlayer.alliance}`;
         const player = filtered.find(p => p[PLAYER] === waitingPlayer.player && p[ALLIANCE] === waitingPlayer.alliance);
         if (!player) continue;
 
-        // Must be minister qualified? The list contains mixed. Filter by minHours?
-        // consolidatedWaitingList items have speedups object.
         if ((waitingPlayer.speedups.construction + waitingPlayer.speedups.research) < minHours) continue;
 
         const day = 3;
@@ -989,38 +1227,8 @@ function calculateScheduleData(players, errors = []) {
         }
     }
 
-    // Step 4: Advisor Overflow to Day 4 Minister (sets research only)
-    // Only for players qualified for advisor who are still in WL
-    for (const waitingPlayer of consolidatedWaitingList.slice()) {
-        const playerId = `${waitingPlayer.player}-${waitingPlayer.alliance}`;
-        const player = filtered.find(p => p[PLAYER] === waitingPlayer.player && p[ALLIANCE] === waitingPlayer.alliance);
-        if (!player) continue;
-        
-        if (waitingPlayer.speedups.soldier < minHours) continue;
-
-        // Try Day 4 minister slots
-        if (!schedulerData.researchAssignments[playerId]) {
-            const day = 4;
-            const taken = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
-            const slots = generateTimeSlots();
-            
-            for (const slot of slots) {
-                if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
-                    schedulerData.assignments[day].ministers.push({
-                        start: slot.start,
-                        end: slot.end,
-                        alliance: waitingPlayer.alliance,
-                        player: waitingPlayer.player,
-                        speedups: `${Math.round(waitingPlayer.speedups.construction)} / ${Math.round(waitingPlayer.speedups.research)}`,
-                        truegold: waitingPlayer.truegold
-                    });
-                    schedulerData.researchAssignments[playerId] = true;
-                    consolidatedWaitingList.splice(consolidatedWaitingList.indexOf(waitingPlayer), 1);
-                    break;
-                }
-            }
-        }
-    }
+    // Note: Old Step 4 (Advisor Overflow to Day 4 Minister) is now handled inside scheduleTrainingDay as Stage 2.
+    // So we don't need it here.
 
     // Set global waiting list
     schedulerData.waitingList = consolidatedWaitingList;
