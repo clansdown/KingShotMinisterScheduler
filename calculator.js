@@ -438,13 +438,13 @@ function scheduleSpilloverDay(schedulerData, spilloverDay, players = null) {
                 if (!(schedulerData.constructionAssignments[playerId] && schedulerData.researchAssignments[playerId])) {
                     // Exact push and flag update as original
                     schedulerData.assignments[spilloverDay].ministers.push({
-                        start: slot.start,
-                        end: slot.end,
-                        alliance: candidate.alliance,
-                        player: candidate.player,
-                        speedups: `${Math.round(candidate.speedups.construction)} / ${Math.round(candidate.speedups.research)}`,
-                        truegold: candidate.truegold
-                    });
+                         start: slot.start,
+                         end: slot.end,
+                         alliance: candidate.alliance,
+                         player: candidate.player,
+                         speedups: `${Math.round(candidate.speedups.construction)} / ${Math.round(candidate.speedups.research)} / ${Math.round(candidate.speedups.soldier)}`,
+                         truegold: candidate.truegold
+                     });
                     if (!schedulerData.constructionAssignments[playerId]) schedulerData.constructionAssignments[playerId] = true;
                     if (!schedulerData.researchAssignments[playerId]) schedulerData.researchAssignments[playerId] = true;
                     taken.add(slot.start);
@@ -1050,7 +1050,7 @@ function updateMinisterSpeedupsHeaders(schedulerData) {
                 } else if (d === 4) {
                     headerElement.textContent = 'Training';
                 } else if (d === spilloverDay) {
-                    headerElement.textContent = 'Soldier / Construction / Research';
+                    headerElement.textContent = 'Construction / Research / Training';
                 }
                 // No match: Leave as HTML default ('Speedups Cn/Rs')
             }
