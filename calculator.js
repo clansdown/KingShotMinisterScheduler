@@ -397,22 +397,16 @@ function scheduleSpilloverDay(schedulerData, spilloverDay) {
 
     // Aggregate waiting lists for spillover (only from king/training days, excluding spillover day)
     const spilloverCandidates = [];
+    const seenPlayers = new Set();
     [constructDay, researchDay, 4].forEach(sourceDay => {
         if (sourceDay !== spilloverDay && schedulerData.waitingLists[sourceDay]) {
             schedulerData.waitingLists[sourceDay].forEach(player => {
-                spilloverCandidates.push({ ...player, originalDay: sourceDay });
+                const key = `${player.alliance}/${player.player}`;
+                if (!seenPlayers.has(key)) {
+                    seenPlayers.add(key);
+                    spilloverCandidates.push({ ...player, originalDay: sourceDay });
+                }
             });
-        }
-    });
-
-    // Remove duplicates (same player from multiple lists), keeping first occurrence
-    const seenPlayers = new Map();
-    const uniqueSpilloverCandidates = [];
-    spilloverCandidates.forEach(player => {
-        const key = `${player.alliance}/${player.player}`;
-        if (!seenPlayers.has(key)) {
-            seenPlayers.set(key, true);
-            uniqueSpilloverCandidates.push(player);
         }
     });
 
@@ -421,7 +415,7 @@ function scheduleSpilloverDay(schedulerData, spilloverDay) {
     const taken = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
     const slots = generateTimeSlots();
 
-    uniqueSpilloverCandidates.forEach(waitingPlayer => {
+    spilloverCandidates.forEach(waitingPlayer => {
         const playerId = `${waitingPlayer.player}-${waitingPlayer.alliance}`;
         // Skip if already assigned for construction or research
         if (schedulerData.constructionAssignments[playerId] && schedulerData.researchAssignments[playerId]) return;
