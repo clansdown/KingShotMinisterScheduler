@@ -945,14 +945,14 @@ function calculateScheduleData(players, errors = []) {
 
 /**
  * Validates that all processed players are either assigned, on a waiting list, or filtered out.
- * Logs errors for any unassigned players not in waiting lists or filtered out.
- * Adds such players to appropriate waiting lists (if total speedups >= minHours) or filtered out list.
- * Players are added to all waiting lists for which they qualify based on their speedups.
+ * Adds qualifying unassigned players to appropriate waiting lists and schedules leftover unassigned players via spillover day.
  * @param {SchedulerData} schedulerData - Main data object.
  * @param {number} minHours - Minimum hours threshold.
  * @param {number} spilloverDay - The spillover day to add players to for general access.
  */
 function validateAndAssignUnassignedPlayers(schedulerData, minHours, spilloverDay) {
+    /** @type {Array<WaitingPlayer>} */
+    const unassignedForSpillover = [];
     const allAppointments = Object.values(schedulerData.assignments).flatMap(day => day.ministers.concat(day.advisors));
 
     schedulerData.processedPlayers.forEach(player => {
@@ -1007,14 +1007,15 @@ function validateAndAssignUnassignedPlayers(schedulerData, minHours, spilloverDa
                 schedulerData.waitingLists[4].push({ ...waitingPlayer });
                 addedToOtherDay = true;
             }
-            // Add to spillover day waiting list only if not added to another day
-            if (!addedToOtherDay) {
-                schedulerData.waitingLists[spilloverDay].push({ ...waitingPlayer });
-            }
+            // Collector for spillover scheduling
+            unassignedForSpillover.push({ ...waitingPlayer });
         } else {
             schedulerData.filteredOut.push(player);
         }
     });
+
+    // Schedule collected unassigned players via spillover
+    scheduleSpilloverDay(schedulerData, spilloverDay, unassignedForSpillover);
 }
 
 /**
