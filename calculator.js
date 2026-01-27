@@ -1761,22 +1761,24 @@ function openMessagesModal(day, role) {
     // Build list of "Alliance/Player" strings
     const lines = assignments.map(app => `${app.start} ${app.alliance}/${app.player}`);
 
-    // Group into blocks <500 chars
+    // Group into blocks <500 chars and max 10 lines
     const blocks = [];
     let currentBlock = '';
+    let currentBlockLineCount = 0;
     lines.forEach(line => {
         const lineWithNewline = line + '\n';
-        const newLength = currentBlock.length + lineWithNewline.length;
-        if (newLength > 499) {
-            if (currentBlock.length > 0) {
-                blocks.push(currentBlock.trimEnd()); // trim trailing newline
-                currentBlock = lineWithNewline;
-            } else {
-                // First line in new block
-                currentBlock = lineWithNewline;
-            }
+        const wouldExceedLineLimit = (currentBlockLineCount + 1) > 10;
+        const wouldExceedCharLimit = (currentBlock.length + lineWithNewline.length) > 499;
+        if (currentBlock.length > 0 && (wouldExceedLineLimit || wouldExceedCharLimit)) {
+            blocks.push(currentBlock.trimEnd());
+            currentBlock = lineWithNewline;
+            currentBlockLineCount = 1;
+        } else if (currentBlock.length === 0 && wouldExceedCharLimit) {
+            currentBlock = lineWithNewline;
+            currentBlockLineCount = 1;
         } else {
             currentBlock += lineWithNewline;
+            currentBlockLineCount++;
         }
     });
     if (currentBlock.length > 0) {
