@@ -568,7 +568,8 @@ function generateTimeSlots() {
  */
 function isSlotAvailable(player, slotStart, slotEnd) {
     const slotStartMin = timeToMinutes(slotStart);
-    const slotEndMin = timeToMinutes(slotEnd);
+    const slotEndMin = slotEnd === "00:00" ? 1440 : timeToMinutes(slotEnd);
+    const slotDuration = slotEndMin >= slotStartMin ? slotEndMin - slotStartMin : (1440 - slotStartMin) + slotEndMin;
     const ranges = player.availableTimeRanges;
 
     // If no specific ranges, no constraints
@@ -583,10 +584,12 @@ function isSlotAvailable(player, slotStart, slotEnd) {
     // Check overall window (for crossing slots, endMin might be 0, handle accordingly)
     const adjustedSlotEndMin = slotEndMin < slotStartMin ? slotEndMin + 1440 : slotEndMin;
     const adjustedOverallEnd = overallEnd < overallStart ? overallEnd + 1440 : overallEnd;
-    if (slotStartMin < overallStart) {
+
+    /* Quick checks for if this slot is completely outside overall available window */
+    if (slotEndMin < overallStart) {
         return false;
     }
-    if (adjustedSlotEndMin > adjustedOverallEnd) {
+    if (slotStartMin > adjustedOverallEnd) {
         return false;
     }
 
