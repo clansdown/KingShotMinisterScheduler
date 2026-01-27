@@ -834,6 +834,7 @@ function populateDebugTable(players) {
                     <th>Research</th>
                     <th>TrueGold</th>
                     <th>Time Slots</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody></tbody>
@@ -872,6 +873,12 @@ function populateDebugTable(players) {
             ? player.availableTimeRanges.map(range => `${range.start}-${range.end}`).join(', ')
             : 'No available ranges';
         row.insertCell(7).textContent = timeSlots;
+        const scheduleCell = row.insertCell(8);
+        const scheduleBtn = document.createElement('button');
+        scheduleBtn.className = 'btn btn-sm btn-outline-primary';
+        scheduleBtn.textContent = 'Schedule';
+        scheduleBtn.onclick = () => openAssignmentModal(player[ALLIANCE], player[PLAYER]);
+        scheduleCell.appendChild(scheduleBtn);
     });
 
     section.style.display = 'block';
