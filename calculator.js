@@ -888,18 +888,23 @@ function populateDebugTable(players) {
  * Calculates the schedule and updates the global schedulerData object.
  * @param {Array<PlayerObject>} players - Array of player objects from CSV.
  * @param {Array<string>} [errors=[]] - Array of error strings from parsing.
+ * @param {boolean} [isRecalculate=false] - If true, preserves rawPlayers and creationTimeMS (for recalculate).
  */
-function calculateScheduleData(players, errors = []) {
+function calculateScheduleData(players, errors = [], isRecalculate = false) {
     const minHours = parseInt(document.getElementById('minHoursInput').value) || 20;
     const constructDay = parseInt(document.getElementById('constructionKingDay').value) || 1;
     const researchDay = parseInt(document.getElementById('researchKingDay').value) || 2;
     const now = Date.now();
-    schedulerData.creationTimeMS = now;
+    if (!isRecalculate) {
+        schedulerData.creationTimeMS = now;
+    }
     schedulerData.lastModifiedTimeMS = now;
     schedulerData.minHours = minHours;
     schedulerData.constructionKingDay = constructDay;
     schedulerData.researchKingDay = researchDay;
-    schedulerData.rawPlayers = JSON.parse(JSON.stringify(players));
+    if (!isRecalculate) {
+        schedulerData.rawPlayers = JSON.parse(JSON.stringify(players));
+    }
     schedulerData.processedPlayers = players; // In-place modification will happen on this array
     // @ts-ignore
     schedulerData.errors = errors; // Store for immediate display
@@ -1107,13 +1112,38 @@ function renderUI(data, scrollToTop = false, errors = []) {
  * @param {Array<string>} [errors=[]] - Parsing errors.
  */
 async function processAndSchedule(players, errors = []) {
-    calculateScheduleData(players, errors);
+    calculateScheduleData(players, errors, false);
     try {
         await saveSchedulerData(schedulerData);
     } catch (e) {
         console.error("Failed to save scheduler data to storage", e);
     }
     renderUI(schedulerData, false, errors);
+}
+
+/**
+ * Recalculates schedule using existing rawPlayers and current settings.
+ * Preserves creation timestamp, updates modification timestamp.
+ */
+async function recalculateSchedule() {
+    if (!schedulerData.rawPlayers || schedulerData.rawPlayers.length === 0) {
+        alert('No raw player data available. Please import a CSV first.');
+        return;
+    }
+
+    document.getElementById('loadingIndicator').style.display = 'block';
+
+    const playersToSchedule = JSON.parse(JSON.stringify(schedulerData.rawPlayers));
+    calculateScheduleData(playersToSchedule, [], true);
+
+    try {
+        await saveSchedulerData(schedulerData);
+    } catch (e) {
+        console.error("Failed to save scheduler data", e);
+    }
+
+    renderUI(schedulerData, false, []);
+    document.getElementById('loadingIndicator').style.display = 'none';
 }
 
 
