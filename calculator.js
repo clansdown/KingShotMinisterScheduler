@@ -1829,11 +1829,16 @@ function updateAssignmentSlots() {
     }
 
     const slots = generateTimeSlots();
+    const showAllSlotsToggle = document.getElementById('showAllSlotsToggle');
+    const showAllSlots = showAllSlotsToggle.checked;
+
     slots.forEach(slot => {
         if (takenStarts.has(slot.start)) return; // Slot taken
-        
-        // Basic availability check
-        if (!isSlotAvailable(playerObj, slot.start, slot.end)) return; // Player busy (time conflict)
+
+        // Check player availability only if NOT showing all slots
+        if (!showAllSlots) {
+            if (!isSlotAvailable(playerObj, slot.start, slot.end)) return; // Player busy (time conflict)
+        }
         
         // Create List Item
         const item = document.createElement('button');
