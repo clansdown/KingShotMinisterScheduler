@@ -490,23 +490,10 @@ function allocateGeneralSpeedups(player) {
     const numCategories = usedFor.length;
     const speedups = player[GENERAL_SPEEDUPS];
     if (numCategories === 0) {
-        // No categories, do nothing or even split? But user said "if three or none, allocate with an even split" – but none might mean all?
-        // Assume even split to all three if none specified.
         const split = speedups / 3;
         player[SOLDIER_TRAINING] += split;
         player[CONSTRUCTION] += split;
         player[RESEARCH] += split;
-    } else if (numCategories === 2) {
-        const split60 = speedups * 0.6;
-        const split40 = speedups * 0.4;
-        const firstCat = usedFor[0];
-        const secondCat = usedFor[1];
-        if (firstCat === CATEGORY_SOLDIER_TRAINING) player[SOLDIER_TRAINING] += split60;
-        else if (firstCat === CATEGORY_CONSTRUCTION) player[CONSTRUCTION] += split60;
-        else if (firstCat === CATEGORY_RESEARCH) player[RESEARCH] += split60;
-        if (secondCat === CATEGORY_SOLDIER_TRAINING) player[SOLDIER_TRAINING] += split40;
-        else if (secondCat === CATEGORY_CONSTRUCTION) player[CONSTRUCTION] += split40;
-        else if (secondCat === CATEGORY_RESEARCH) player[RESEARCH] += split40;
     } else {
         const split = speedups / numCategories;
         usedFor.forEach(cat => {
