@@ -823,10 +823,20 @@ function populateDebugTable(players) {
                 <h2>Player Information</h2>
             </div>
             <div class="col text-end">
-                <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDebugTable" onclick="toggleTable('debugTable')">Expand</button>
+                <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleDebugTable" onclick="toggleTable('debugTableWrapper')">Expand</button>
             </div>
         </div>
-        <table id="debugTable" class="table table-striped w-100" style="display: none;">
+        <div id="debugTableWrapper" style="display: none;">
+            <div class="row mb-3">
+                <div class="col">
+                    <div class="input-group">
+                        <span class="input-group-text">Filter:</span>
+                        <input type="text" class="form-control" id="debugTableFilter" placeholder="Filter by player name..." data-bs-toggle="tooltip" title="Filter by player name. Press Escape to clear.">
+                        <button class="btn btn-outline-secondary" type="button" id="debugTableClearFilter">Clear</button>
+                    </div>
+                </div>
+            </div>
+            <table id="debugTable" class="table table-striped w-100">
             <thead>
                 <tr>
                     <th>Player/Alliance</th>
@@ -846,15 +856,15 @@ function populateDebugTable(players) {
 
     // Set initial visibility based on localStorage
     const button = document.getElementById('toggleDebugTable');
-    const table = document.getElementById('debugTable');
-    const isVisible = localStorage.getItem('debugTableVisible') === 'true';
+    const wrapper = document.getElementById('debugTableWrapper');
+    const isVisible = localStorage.getItem('debugTableWrapperVisible') === 'true';
     if (isVisible) {
-        table.style.display = '';
+        wrapper.style.display = '';
         button.textContent = 'Collapse';
     } else {
-        table.style.display = 'none';
+        wrapper.style.display = 'none';
         button.textContent = 'Expand';
-        localStorage.setItem('debugTableVisible', 'false');
+        localStorage.setItem('debugTableWrapperVisible', 'false');
     }
 
     const tbody = section.querySelector('#debugTable tbody');
@@ -882,6 +892,38 @@ function populateDebugTable(players) {
         scheduleBtn.textContent = 'Schedule';
         scheduleBtn.onclick = () => openAssignmentModal(player[ALLIANCE], player[PLAYER]);
         scheduleCell.appendChild(scheduleBtn);
+    });
+
+    const filterInput = document.getElementById('debugTableFilter');
+    const clearButton = document.getElementById('debugTableClearFilter');
+
+    filterInput.addEventListener('input', function() {
+        const filterValue = filterInput.value.toLowerCase().trim();
+        const rows = tbody.querySelectorAll('tr');
+        rows.forEach(row => {
+            const cell = row.cells[0];
+            const playerName = cell.textContent.split('/')[1].toLowerCase();
+            if (filterValue === '' || playerName.includes(filterValue)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    });
+
+    clearButton.addEventListener('click', function() {
+        filterInput.value = '';
+        const rows = tbody.querySelectorAll('tr');
+        rows.forEach(row => {
+            row.style.display = '';
+        });
+    });
+
+    filterInput.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            clearButton.click();
+        }
     });
 
     section.style.display = 'block';

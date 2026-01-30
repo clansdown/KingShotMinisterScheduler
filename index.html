@@ -600,17 +600,23 @@
           * Toggles the visibility of a table and updates the button text.
           * @param {string} tableId - The ID of the table to toggle.
           */
-        function toggleTable(tableId) {
-            const table = document.getElementById(tableId);
-            const button = document.getElementById('toggle' + tableId.charAt(0).toUpperCase() + tableId.slice(1).replace('Table', ''));
-            if (table.style.display === 'none') {
-                table.style.display = '';
-                button.textContent = 'Collapse';
-                localStorage.setItem(tableId + 'Visible', 'true');
+        function toggleTable(elementId) {
+            const element = document.getElementById(elementId);
+            let buttonId;
+            if (elementId.endsWith('Wrapper')) {
+                buttonId = 'toggle' + elementId.charAt(0).toUpperCase() + elementId.slice(1).replace('Wrapper', '');
             } else {
-                table.style.display = 'none';
+                buttonId = 'toggle' + elementId.charAt(0).toUpperCase() + elementId.slice(1).replace('Table', '');
+            }
+            const button = document.getElementById(buttonId);
+            if (element.style.display === 'none') {
+                element.style.display = '';
+                button.textContent = 'Collapse';
+                localStorage.setItem(elementId + 'Visible', 'true');
+            } else {
+                element.style.display = 'none';
                 button.textContent = 'Expand';
-                localStorage.setItem(tableId + 'Visible', 'false');
+                localStorage.setItem(elementId + 'Visible', 'false');
             }
         }
 
