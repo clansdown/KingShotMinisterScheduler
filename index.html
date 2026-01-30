@@ -65,13 +65,13 @@
              </ul>
          </div>
          <div id="howItWorksDetails" class="help-details" style="display: none;">
-             <ul class="list-group list-group-flush mt-2">
-                 <li class="list-group-item"><strong>Speedup Allocation</strong>: General speedups are distributed based on the 'General Used For' field. Empty field or all three categories (Soldier Training, Construction, Research) → even split among them. Two categories → 60% to the first listed, 40% to the second. One category → all to that category. </li>
-                 <li class="list-group-item"><strong>Player Filtering</strong>: Players are included only if they meet the minimum speedups: Construction + Research ≥ minimum for minister roles, or Soldier Training ≥ minimum for advisor roles.</li>
-                 <li class="list-group-item"><strong>Ranking</strong>: Players qualifying for minister roles are ranked by the sum of Construction and Research speedups. Players qualifying for advisor roles are ranked by Soldier Training speedups.</li>
-                 <li class="list-group-item"><strong>Scheduling</strong>: Players are processed in ranked order. For each player, starting with the first, they are assigned to
-                     the earliest available 30-minute slot that fits their time windows if there is one available. (If none are available, they're put on the waiting list.)</li>
-             </ul>
+              <ul class="list-group list-group-flush mt-2">
+                  <li class="list-group-item"><strong>Speedup Allocation</strong>: General speedups are distributed based on the 'General Used For' field. Empty field or all three categories (Soldier Training, Construction, Research) → even split among them. Two categories → 50% split. One category → all to that category.</li>
+                  <li class="list-group-item"><strong>Player Filtering</strong>: To prevent clogging the assignments up and to be more lenient on the people doing data entry, players are included only if they meet the minimum speedups.</li>
+                  <li class="list-group-item"><strong>Ranking</strong>: Players qualifying for Chief Minister are ranked by whichever speedup is appropriate to the day, after general speedups have been distributed. (Noble Advisor is ranked by Soldier Training speedups, again, after general speedups have been distributed.)</li>
+                  <li class="list-group-item"><strong>Scheduling</strong>: Each day's scheduling uses a two-round process. Round 1: Players are sorted by total available minutes (narrowest time windows first) and greedily assigned to the earliest available 30-minute slots. Round 2: Unassigned players can displace already-assigned players who have lower speedup values. (If no slots are available, players go to the waiting list.)</li>
+                  <li class="list-group-item"><strong>During The Event</strong>: Use the Stage dropdown in the Manage Schedule toolbar to control recalculation scope. "Before Event" calculates all days, while "After Day X" preserves earlier days' schedules and only recalculates future days. This enables live event player edits and recalculation without affecting already-scheduled appointments.</li>
+              </ul>
          </div>
     </div>
      <div class="row">
@@ -145,7 +145,7 @@
                                 Remove Player
                             </button>
                         </div>
-                        <div class="col-lg-2 offset-lg-2">
+                        <div class="col-lg-3 offset-lg-1">
                             <div class="input-group">
                                 <label class="input-group-text" for="currentDaySelect">Stage:</label>
                                 <select id="currentDaySelect" class="form-select" title="Stage used for calculating and recalculating. Only days after this position are processed.">
