@@ -84,7 +84,8 @@ const schedulerData = {
     creationTimeMS: 0,
     lastModifiedTimeMS: 0,
     constructionKingDay: 1,
-    researchKingDay: 2
+    researchKingDay: 2,
+    currentDay: 0
 };
 
 // Constants for CSV field names are imported from parse.js
@@ -977,18 +978,26 @@ function calculateScheduleData(players, errors = [], isRecalculate = false) {
 
     // Construction buff assignment (Initial Two-Round)
     const constructionList = filtered.filter(player => player[CONSTRUCTION] >= minHours);
-    assignInitialMinisters(constructDay, constructionList, CONSTRUCTION, 'constructionAssignments', schedulerData);
 
     // Research buff assignment (Initial Two-Round)
     const researchList = filtered.filter(player => player[RESEARCH] >= minHours);
-    assignInitialMinisters(researchDay, researchList, RESEARCH, 'researchAssignments', schedulerData);
 
     // Advisor assignment for Day 4 (Two Stages, Two Rounds each)
     const trainingList = filtered.filter(player => player[SOLDIER_TRAINING] >= minHours);
-    scheduleTrainingDay(trainingList, minHours, schedulerData);
 
-    // Assign spillover candidates to spillover day
-    scheduleSpilloverDay(schedulerData, spilloverDay);
+    // Only process days > currentDay
+    const tasks = [
+        { day: constructDay, shouldRun: constructDay > schedulerData.currentDay, fn: () => assignInitialMinisters(constructDay, constructionList, CONSTRUCTION, 'constructionAssignments', schedulerData) },
+        { day: researchDay, shouldRun: researchDay > schedulerData.currentDay, fn: () => assignInitialMinisters(researchDay, researchList, RESEARCH, 'researchAssignments', schedulerData) },
+        { day: 4, shouldRun: 4 > schedulerData.currentDay, fn: () => scheduleTrainingDay(trainingList, minHours, schedulerData) },
+        { day: spilloverDay, shouldRun: spilloverDay > schedulerData.currentDay, fn: () => scheduleSpilloverDay(schedulerData, spilloverDay) }
+    ];
+
+    tasks.forEach(task => {
+        if (task.shouldRun) {
+            task.fn();
+        }
+    });
 
     validateAndAssignUnassignedPlayers(schedulerData, minHours, spilloverDay);
 }
@@ -1141,6 +1150,13 @@ function renderUI(data, scrollToTop = false, errors = []) {
     if (scrollToTop) {
         document.getElementById('day1HeadingWrapper').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+
+    // Sync current day dropdown
+    const currentDaySelect = document.getElementById('currentDaySelect');
+    if (currentDaySelect) {
+        currentDaySelect.value = schedulerData.currentDay;
+    }
+
     document.getElementById('loadingIndicator').style.display = 'none';
 }
 
@@ -1220,6 +1236,7 @@ function loadSchedulerSystem(data) {
     // Set defaults for new fields
     schedulerData.constructionKingDay = schedulerData.constructionKingDay ?? 1;
     schedulerData.researchKingDay = schedulerData.researchKingDay ?? 2;
+    schedulerData.currentDay = schedulerData.currentDay ?? 0;
     schedulerData.assignments[3] = schedulerData.assignments[3] ?? { ministers: [], advisors: [] };
 
     // Update UI inputs
@@ -1320,6 +1337,11 @@ document.addEventListener('DOMContentLoaded', () => {
         submitBtn.textContent = 'Add Player';
         submitBtn.onclick = submitAddPlayer;
         document.getElementById('addPlayerForm').reset();
+    });
+
+    // Current day selector event listener
+    document.getElementById('currentDaySelect').addEventListener('change', function() {
+        schedulerData.currentDay = parseInt(this.value);
     });
 
     // Setup event listeners after DOM is loaded

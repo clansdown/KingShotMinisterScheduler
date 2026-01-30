@@ -145,15 +145,26 @@
                                 Remove Player
                             </button>
                         </div>
-                        <div class="col-lg-4"></div>
+                        <div class="col-lg-2 offset-lg-2">
+                            <div class="input-group">
+                                <label class="input-group-text" for="currentDaySelect">Stage:</label>
+                                <select id="currentDaySelect" class="form-select" title="Stage used for calculating and recalculating. Only days after this position are processed.">
+                                    <option value="0" selected>Before Event</option>
+                                    <option value="1">After Day 1</option>
+                                    <option value="2">After Day 2</option>
+                                    <option value="4">After Day 4</option>
+                                    <option value="5">After Day 5</option>
+                                </select>
+                            </div>
+                        </div>
                         <div class="col-lg-2">
                             <button class="btn btn-warning btn-sm w-100"
                                     onclick="recalculateSchedule()"
-                                    title="Recalculate the schedule using existing players and current settings. Discards manual changes.">
+                                    id="recalculateButton"
+                                    title="Recalculate the schedule using existing players and current settings. Discards manual changes. Days ≥ selected stage will be recalculated.">
                                 Recalculate
                             </button>
                         </div>
-                        <div class="col-lg-1"></div>
                     </div>
                 </div>
             </div>
