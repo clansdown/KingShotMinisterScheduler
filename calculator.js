@@ -892,6 +892,12 @@ function populateDebugTable(players) {
         scheduleBtn.textContent = 'Schedule';
         scheduleBtn.onclick = () => openAssignmentModal(player[ALLIANCE], player[PLAYER]);
         scheduleCell.appendChild(scheduleBtn);
+
+        const editBtn = document.createElement('button');
+        editBtn.className = 'btn btn-sm btn-outline-secondary ms-1';
+        editBtn.textContent = 'Edit';
+        editBtn.onclick = () => openEditPlayerModal(player[ALLIANCE], player[PLAYER]);
+        scheduleCell.appendChild(editBtn);
     });
 
     const filterInput = document.getElementById('debugTableFilter');
@@ -1317,6 +1323,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // @ts-ignore
     new bootstrap.Modal(document.getElementById('removeUserModal'));
 
+    // Reset addPlayerModal to "Add Player" state after close
+    document.getElementById('addPlayerModal').addEventListener('hidden.bs.modal', function() {
+        const modal = document.getElementById('addPlayerModal');
+        modal.removeAttribute('data-edit-alliance');
+        modal.removeAttribute('data-edit-player');
+        document.querySelector('#addPlayerModal .modal-title').textContent = 'Add Player';
+        const submitBtn = document.querySelector('#addPlayerModal .btn-primary');
+        submitBtn.textContent = 'Add Player';
+        submitBtn.onclick = submitAddPlayer;
+        document.getElementById('addPlayerForm').reset();
+    });
+
     // Setup event listeners after DOM is loaded
 
     // Event listener for CSV file input
@@ -1393,12 +1411,12 @@ function submitAddPlayer() {
     const form = document.getElementById('addPlayerForm');
     // @ts-ignore
     const formData = new FormData(form);
-    
+
     // Create new player object
     const checkedCategories = [];
-    if (formData.get('soldierTraining')) checkedCategories.push('Soldier Training');
-    if (formData.get('construction')) checkedCategories.push('Construction');
-    if (formData.get('research')) checkedCategories.push('Research');
+    if (formData.get('useSoldierTraining')) checkedCategories.push('Soldier Training');
+    if (formData.get('useConstruction')) checkedCategories.push('Construction');
+    if (formData.get('useResearch')) checkedCategories.push('Research');
 
     const newPlayer = {
         [ALLIANCE]: formData.get('alliance'),
@@ -1707,6 +1725,121 @@ function submitAddPlayer() {
     const alert = document.getElementById('assignmentNotification');
     document.getElementById('assignmentNotificationText').textContent = message;
     alert.style.display = 'block';
+}
+
+/**
+ * Opens the edit player modal pre-populated with player data.
+ * @param {string} alliance - Player's alliance.
+ * @param {string} player - Player's name.
+ */
+function openEditPlayerModal(alliance, player) {
+    const playerKey = `${player}-${alliance}`;
+    const rawPlayer = schedulerData.rawPlayers.find(p => `${p[PLAYER]}-${p[ALLIANCE]}` === playerKey);
+
+    if (!rawPlayer) {
+        console.error('Player not found in rawPlayers:', playerKey);
+        return;
+    }
+
+    const modal = document.getElementById('addPlayerModal');
+    modal.setAttribute('data-edit-alliance', alliance);
+    modal.setAttribute('data-edit-player', player);
+
+    document.querySelector('#addPlayerModal .modal-title').textContent = 'Edit Player';
+    const submitBtn = document.querySelector('#addPlayerModal .btn-primary');
+    submitBtn.textContent = 'Save Changes';
+    submitBtn.onclick = submitEditPlayer;
+
+    const form = document.getElementById('addPlayerForm');
+    form.reset();
+
+    form.alliance.value = rawPlayer[ALLIANCE];
+    form.player.value = rawPlayer[PLAYER];
+    form.generalSpeedups.value = rawPlayer[GENERAL_SPEEDUPS];
+    console.log("Raw player soldierTraining value:", rawPlayer[SOLDIER_TRAINING]);
+    console.log("Form soldierTraining before assignment:", form.soldierTraining.value);
+    form.soldierTraining.value = rawPlayer[SOLDIER_TRAINING];
+    console.log("Form soldierTraining after assignment:", form.soldierTraining.value);
+    form.construction.value = rawPlayer[CONSTRUCTION];
+    form.research.value = rawPlayer[RESEARCH];
+    form.truegoldPieces.value = rawPlayer[TRUEGOLD_PIECES];
+    form.timeSlotStartUtc.value = rawPlayer[TIME_SLOT_START_UTC] || '';
+    form.timeSlotEndUtc.value = rawPlayer[TIME_SLOT_END_UTC] || '';
+    form.allTimes.value = rawPlayer[ALL_TIMES] || '';
+
+    const usedFor = rawPlayer[GENERAL_USED_FOR] || '';
+    const categories = usedFor.split(',').map(s => s.trim());
+    form.useSoldierTraining.checked = categories.includes('Soldier Training');
+    form.useConstruction.checked = categories.includes('Construction');
+    form.useResearch.checked = categories.includes('Research');
+
+    new bootstrap.Modal(modal).show();
+}
+
+/**
+ * Handles the "Edit Player" form submission.
+ * Updates player data without triggering rescheduling.
+ */
+function submitEditPlayer() {
+    const modal = document.getElementById('addPlayerModal');
+    const originalAlliance = modal.getAttribute('data-edit-alliance');
+    const originalPlayer = modal.getAttribute('data-edit-player');
+    const originalKey = `${originalPlayer}-${originalAlliance}`;
+
+    const form = document.getElementById('addPlayerForm');
+    const formData = new FormData(form);
+
+    const checkedCategories = [];
+    if (formData.get('useSoldierTraining')) checkedCategories.push('Soldier Training');
+    if (formData.get('useConstruction')) checkedCategories.push('Construction');
+    if (formData.get('useResearch')) checkedCategories.push('Research');
+
+    const updatedPlayer = {
+        [ALLIANCE]: formData.get('alliance'),
+        [PLAYER]: formData.get('player'),
+        [GENERAL_SPEEDUPS]: parseFloat(formData.get('generalSpeedups').toString()) || 0,
+        [GENERAL_USED_FOR]: checkedCategories.join(', '),
+        [SOLDIER_TRAINING]: parseFloat(formData.get('soldierTraining').toString()) || 0,
+        [CONSTRUCTION]: parseFloat(formData.get('construction').toString()) || 0,
+        [RESEARCH]: parseFloat(formData.get('research').toString()) || 0,
+        [TRUEGOLD_PIECES]: parseFloat(formData.get('truegoldPieces').toString()) || 0,
+        [TIME_SLOT_START_UTC]: normalizeTime(formData.get('timeSlotStartUtc').toString()) || '00:00',
+        [TIME_SLOT_END_UTC]: normalizeTime(formData.get('timeSlotEndUtc').toString()) || '23:59',
+        [ALL_TIMES]: formData.get('allTimes')
+    };
+
+    updatedPlayer.availableTimeRanges = parseTimeRanges(updatedPlayer[ALL_TIMES]);
+    const overallRanges = parseTimeRanges(`${updatedPlayer[TIME_SLOT_START_UTC]}-${updatedPlayer[TIME_SLOT_END_UTC]}`);
+    updatedPlayer.availableTimeRanges = unionTimeRanges(overallRanges.concat(updatedPlayer.availableTimeRanges));
+
+    allocateGeneralSpeedups(updatedPlayer);
+
+    const rawIndex = schedulerData.rawPlayers.findIndex(p => `${p[PLAYER]}-${p[ALLIANCE]}` === originalKey);
+    if (rawIndex !== -1) {
+        schedulerData.rawPlayers[rawIndex] = updatedPlayer;
+    }
+
+    const processedIndex = schedulerData.processedPlayers.findIndex(p => `${p[PLAYER]}-${p[ALLIANCE]}` === originalKey);
+    if (processedIndex !== -1) {
+        schedulerData.processedPlayers[processedIndex] = updatedPlayer;
+    }
+
+    async function finishEdit() {
+        try {
+            await saveSchedulerData(schedulerData);
+        } catch (e) {
+            console.error("Save failed", e);
+        }
+        renderUI(schedulerData);
+
+        bootstrap.Modal.getInstance(document.getElementById('addPlayerModal'))?.hide();
+
+        const alert = document.getElementById('assignmentNotification');
+        document.getElementById('assignmentNotificationText').textContent = 'Player saved successfully.';
+        alert.style.display = 'block';
+    }
+
+    finishEdit();
 }
 
 /**
