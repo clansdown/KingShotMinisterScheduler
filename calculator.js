@@ -1344,6 +1344,16 @@ document.addEventListener('DOMContentLoaded', () => {
         schedulerData.currentDay = parseInt(this.value);
     });
 
+    // Player Form modal and copy functionality
+    document.getElementById('playerFormBtn').addEventListener('click', function() {
+        new bootstrap.Modal(document.getElementById('playerFormModal')).show();
+    });
+
+    document.getElementById('copyPlayerFormBtn').addEventListener('click', function() {
+        const formContent = document.getElementById('playerFormContent').textContent;
+        copyToClipboard(formContent);
+    });
+
     // Setup event listeners after DOM is loaded
 
     // Event listener for CSV file input

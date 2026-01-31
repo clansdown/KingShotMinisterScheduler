@@ -45,9 +45,9 @@
                   <button class="btn btn-outline-primary me-2" type="button" id="helpToggleBtn" aria-expanded="false">Show Field Help</button>
                   <button class="btn btn-outline-primary" type="button" id="howItWorksBtn" aria-expanded="false">How It Works</button>
               </div>
-              <div class="col text-end">
-                  (<a href="blank.csv">Download Blank CSV</a>)
-              </div>
+<div class="col text-end">
+                   (<button id="playerFormBtn" class="btn btn-link p-0">Player Form</button>) (<a href="blank.csv">Download Blank CSV</a>)
+               </div>
           </div>
          <div id="helpDetails" class="help-details" style="display: none;">
              <ul class="list-group list-group-flush mt-2">
@@ -551,6 +551,38 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-danger" onclick="submitRemoveUser()">Remove User</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Player Form Modal -->
+    <div class="modal fade" id="playerFormModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content p-5">
+                <div class="modal-header">
+                    <h5 class="modal-title">Blank Player Form</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Blank Player Form Template - CSV header row -->
+                    <pre id="playerFormContent" class="border  border-2 rounded-3 p-4">
+Alliance: XXX / Player: XXX
+
+Training Speedups: xx days
+Construction Speedups: xx days
+Research Speedups: xx days
+(Include general speedups where you will use them.)
+
+TrueGold: xx pieces (only if TC30)
+Availability (UTC): xx:xx-xx:xx (multiple OK)
+                    </pre>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" id="copyPlayerFormBtn">
+                        📋 Copy to Clipboard
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
