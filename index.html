@@ -70,7 +70,7 @@
                   <li class="list-group-item"><strong>Player Filtering</strong>: To prevent clogging the assignments up and to be more lenient on the people doing data entry, players are included only if they meet the minimum speedups.</li>
                   <li class="list-group-item"><strong>Ranking</strong>: Players qualifying for Chief Minister are ranked by whichever speedup is appropriate to the day, after general speedups have been distributed. (Noble Advisor is ranked by Soldier Training speedups, again, after general speedups have been distributed.)</li>
                   <li class="list-group-item"><strong>Scheduling</strong>: Each day's scheduling uses a two-round process. Round 1: Players are sorted by total available minutes (narrowest time windows first) and greedily assigned to the earliest available 30-minute slots. Round 2: Unassigned players can displace already-assigned players who have lower speedup values. (If no slots are available, players go to the waiting list.)</li>
-                  <li class="list-group-item"><strong>During The Event</strong>: Use the Stage dropdown in the Manage Schedule toolbar to control recalculation scope. "Before Event" calculates all days, while "After Day X" preserves earlier days' schedules and only recalculates future days. This enables live event player edits and recalculation without affecting already-scheduled appointments.</li>
+                  <li class="list-group-item"><strong>During The Event</strong>: Use the Stage dropdown in the Manage Schedule toolbar to control recalculation scope. "Before Event" calculates all days, while "Day X" preserves that day and earlier days' schedules and only recalculates future days. This enables live event player edits and recalculation without affecting already-scheduled appointments.</li>
               </ul>
          </div>
     </div>
@@ -150,10 +150,10 @@
                                 <label class="input-group-text" for="currentDaySelect">Stage:</label>
                                 <select id="currentDaySelect" class="form-select" title="Stage used for calculating and recalculating. Only days after this position are processed.">
                                     <option value="0" selected>Before Event</option>
-                                    <option value="1">After Day 1</option>
-                                    <option value="2">After Day 2</option>
-                                    <option value="4">After Day 4</option>
-                                    <option value="5">After Day 5</option>
+                                    <option value="1">Day 1</option>
+                                    <option value="2">Day 2</option>
+                                    <option value="4">Day 4</option>
+                                    <option value="5">Day 5</option>
                                 </select>
                             </div>
                         </div>
