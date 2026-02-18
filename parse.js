@@ -259,7 +259,7 @@ function parseCsvToObjects(csvText) {
     }
 
     const headers = parseCsvLine(firstLine, delimiter);
-    const players = [];
+    const playerMap = new Map();
     const errors = [];
 
     for (let i = 1; i < lines.length; i++) {
@@ -342,10 +342,27 @@ function parseCsvToObjects(csvText) {
                 player.availableTimeRanges = parseTimeRanges(allTimes);
             }
 
-            players.push(player);
+            // Validate that player name is present
+            if (!player[PLAYER] || player[PLAYER].trim() === '') {
+                errors.push(`Line ${lineNumber}: Missing required 'Player' field. Raw line: "${rawLine}"`);
+                continue;
+            }
+
+            // Create unique key from alliance and player
+            const allianceValue = player[ALLIANCE] || '';
+            const playerValue = player[PLAYER];
+            const playerKey = `${allianceValue}/${playerValue}`;
+
+            // Check for duplicate and log to console
+            if (playerMap.has(playerKey)) {
+                console.log(`Duplicate player entry detected: ${playerKey} (line ${lineNumber})`);
+            }
+
+            // Store player in Map (overwrites if key already exists)
+            playerMap.set(playerKey, player);
         } catch (e) {
             errors.push(`Line ${lineNumber}: Time parsing error - ${e.message}. Raw line: "${rawLine}"`);
         }
     }
-    return { players, errors };
+    return { players: Array.from(playerMap.values()), errors };
 }
