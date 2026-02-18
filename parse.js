@@ -203,12 +203,11 @@ function parseCsvToObjects(csvText) {
         if (lineHasError) continue;
 
         try {
-            // Parse availableTimeRanges from 'All Times'
-            player.availableTimeRanges = parseTimeRanges(player[ALL_TIMES]);
-            
-            // Validate time slot start/end format if present
             const start = player[TIME_SLOT_START_UTC];
             const end = player[TIME_SLOT_END_UTC];
+            const allTimes = player[ALL_TIMES];
+
+            // Validate time slot start/end format if present
             if (start && !/^\d{1,2}(:\d{2})?$/.test(start)) {
                  throw new Error(`Invalid format for '${TIME_SLOT_START_UTC}': "${start}"`);
             }
@@ -216,9 +215,33 @@ function parseCsvToObjects(csvText) {
                  throw new Error(`Invalid format for '${TIME_SLOT_END_UTC}': "${end}"`);
             }
 
-            // Union with overall time window
-            const overallRanges = parseTimeRanges(`${player[TIME_SLOT_START_UTC]}-${player[TIME_SLOT_END_UTC]}`);
-            player.availableTimeRanges = unionTimeRanges(overallRanges.concat(player.availableTimeRanges));
+            // Determine presence of inputs
+            const startPresent = start !== undefined && start !== '' && start !== null;
+            const endPresent = end !== undefined && end !== '' && end !== null;
+            const hasTimeSlots = startPresent && endPresent;
+            const hasAllTimes = allTimes !== undefined && allTimes !== '' && allTimes !== null;
+
+            // Validate: start/end must both be present or both absent
+            if (startPresent !== endPresent) {
+                throw new Error(`Must provide both '${TIME_SLOT_START_UTC}' and '${TIME_SLOT_END_UTC}' together, or omit both`);
+            }
+
+            // Validate: either time slots or all times must be present
+            if (!hasTimeSlots && !hasAllTimes) {
+                throw new Error(`Must provide '${ALL_TIMES}' (or both '${TIME_SLOT_START_UTC}' and '${TIME_SLOT_END_UTC}' for backwards compatibility)`);
+            }
+
+            // Parse availableTimeRanges based on presence of inputs
+            if (hasTimeSlots && hasAllTimes) {
+                const timeSlotRanges = parseTimeRanges(`${start}-${end}`);
+                const allTimesRanges = parseTimeRanges(allTimes);
+                player.availableTimeRanges = unionTimeRanges(timeSlotRanges.concat(allTimesRanges));
+            } else if (hasTimeSlots) {
+                player.availableTimeRanges = parseTimeRanges(`${start}-${end}`);
+            } else {
+                player.availableTimeRanges = parseTimeRanges(allTimes);
+            }
+
             players.push(player);
         } catch (e) {
             errors.push(`Line ${lineNumber}: Time parsing error - ${e.message}. Raw line: "${rawLine}"`);
