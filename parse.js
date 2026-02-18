@@ -44,11 +44,38 @@ function timeToMinutes(time) {
 }
 
 /**
+ * Extracts and normalizes a time string to HH:MM format, handling am/pm.
+ * @param {string} timeStr - Time string, e.g., "19", "19:30", "2am", "9pm".
+ * @returns {string} Normalized time in HH:MM format, or null if invalid.
+ */
+function extractTimeWithAmPm(timeStr) {
+    const match = timeStr.match(/(\d{1,2})(?::(\d{2}))?(?:am|pm|AM|PM)?/i);
+    if (!match) return null;
+
+    let h = parseInt(match[1], 10);
+    const m = match[2] ? parseInt(match[2], 10) : 0;
+    const ampm = match[3] ? match[3].toLowerCase() : null;
+
+    // Handle am/pm (assume 24h unless specified)
+    if (ampm === 'pm' && h !== 12) h += 12;
+    if (ampm === 'am' && h === 12) h = 0;
+
+    // Treat 24 as midnight (00:00)
+    if (h === 24) h = 0;
+    h = Math.max(0, Math.min(23, h));
+    const clampedM = Math.max(0, Math.min(59, m));
+
+    return `${h.toString().padStart(2, '0')}:${clampedM.toString().padStart(2, '0')}`;
+}
+
+/**
  * Normalizes a time string to HH:MM format, clamping hours to 0-23.
+ * Used by calculator.js for form input normalization.
  * @param {string} timeStr - Time string, e.g., "19" or "19:30".
  * @returns {string} Normalized time in HH:MM format.
  */
 function normalizeTime(timeStr) {
+    if (!timeStr) return '00:00';
     let [h, m] = timeStr.split(':').map(Number);
     if (isNaN(h)) h = 0;
     if (isNaN(m)) m = 0;
@@ -79,36 +106,109 @@ function unionTimeRanges(ranges) {
 
 /**
  * Parses the 'All Times' field into an array of time range objects.
- * Handles raw hours (e.g., "19" -> "19:00"), clamps hours to 0-23 using modulo 24,
- * and splits overnight ranges (start >= end) into two: start to 23:59 and 00:00 to end,
- * unless the end is exactly 00:00, in which case it's treated as a single range to 23:59.
- * @param {string} allTimes - Comma-separated time ranges, e.g., "00:00-12:00,19-2".
+ * Handles raw hours (e.g., "19" -> "19:00"), am/pm notation, and splits overnight ranges.
+ * Uses sequential time extraction: if a range delimiter is found between times, treats as range;
+ * otherwise treats each time as a single-hour slot. Overnight ranges (start >= end) are split
+ * into two ranges at midnight, unless end is exactly midnight (00:00).
+ * @param {string} allTimes - Time availability string, e.g., "00:00-12:00,19-2" or "19 to 22".
  * @returns {Array<TimeRange>} Array of time range objects.
  */
 function parseTimeRanges(allTimes) {
     if (!allTimes) {
         return [];
     }
-    const cleaned = allTimes.replace(/\s*(or|and|&)\s*/gi, ',').replace(/\//g, ','); // Replace delimiters and / with comma
-    const stripped = cleaned.replace(/[^0-9:,\-]/g, ''); // Strip invalid characters
+
+    // Regex patterns
+    const TIME_PATTERN = /(\d{1,2})(?::(\d{2}))?(?:am|pm|AM|PM)?/gi;
+    const RANGE_DELIMITER = /\s*(?:[-–—]|(?:to|till|until|through|thru)(?:\s+times?)?)\s*/gi;
+
+    // Remove common noise words that are not range or section delimiters
+    const cleaned = allTimes.replace(/(?:at|from|between|start(?:ing)?|end(?:ing)?|hours|avail(?:ability)?|free|can\s+play)\s*/gi, '');
+
+    // Find all time matches with their positions
+    /** @type {Array<{index: number, timeStr: string, normalized: string}>} */
+    const timeMatches = [];
+    let match;
+    const timeRegex = new RegExp(TIME_PATTERN);
+    while ((match = timeRegex.exec(cleaned)) !== null) {
+        const normalized = extractTimeWithAmPm(match[0]);
+        if (normalized) {
+            timeMatches.push({
+                index: match.index,
+                timeStr: match[0],
+                normalized: normalized
+            });
+        }
+    }
+
+    if (timeMatches.length === 0) {
+        return [];
+    }
+
     const ranges = [];
-    stripped.split(',').forEach(range => {
-        const parts = range.split('-');
-        if (parts.length !== 2) return; // Skip invalid ranges
-        const start = normalizeTime(parts[0]);
-        const end = normalizeTime(parts[1]);
-        const startMin = timeToMinutes(start);
-        const endMin = timeToMinutes(end);
-        if (startMin < endMin) {
-            ranges.push({ start, end });
-        } else {
-            ranges.push({ start, end: '23:59' });
-            if (end !== '00:00') {
-                ranges.push({ start: '00:00', end });
+    let i = 0;
+
+    while (i < timeMatches.length) {
+        const startTime = timeMatches[i].normalized;
+        const startIndex = timeMatches[i].index;
+        const startEndIndex = startIndex + timeMatches[i].timeStr.length;
+
+        // Check if there's a next time
+        if (i + 1 < timeMatches.length) {
+            const nextTime = timeMatches[i + 1];
+            const textBetween = cleaned.substring(startEndIndex, nextTime.index);
+
+            // Check if there's a range delimiter between current and next time
+            RANGE_DELIMITER.lastIndex = 0;
+            const delimiterMatch = RANGE_DELIMITER.exec(textBetween);
+
+            if (delimiterMatch) {
+                // Range mode: next time is the end of the range
+                const endTime = nextTime.normalized;
+                addRangeIfValid(ranges, startTime, endTime);
+                i += 2; // Skip to next pair after the range
+                continue;
             }
         }
-    });
+
+        // Single hour mode: treat as hour-long slot starting at this time
+        const hour = parseInt(startTime.split(':')[0], 10);
+        const endHour = (hour + 1) % 24;
+        const endTime = `${endHour.toString().padStart(2, '0')}:00`;
+        addRangeIfValid(ranges, startTime, endTime);
+        i++;
+    }
+
     return ranges;
+}
+
+/**
+ * Adds a time range to the array, handling overnight ranges by splitting at midnight.
+ * If end is exactly midnight (00:00), does not split (treats as single range to midnight).
+ * @param {Array<TimeRange>} ranges - Array to push the range to.
+ * @param {string} start - Start time in HH:MM.
+ * @param {string} end - End time in HH:MM.
+ */
+function addRangeIfValid(ranges, start, end) {
+    const startMin = timeToMinutes(start);
+    const endMin = timeToMinutes(end);
+
+    // Same start and end = invalid, skip
+    if (startMin === endMin) {
+        return;
+    }
+
+    // Within same day
+    if (startMin < endMin) {
+        ranges.push({ start, end });
+    } else {
+        // Overnight range - split at midnight
+        ranges.push({ start, end: '23:59' });
+        // Only add second part if end is not midnight
+        if (end !== '00:00') {
+            ranges.push({ start: '00:00', end });
+        }
+    }
 }
 
 /**
