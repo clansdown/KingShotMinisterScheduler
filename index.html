@@ -10,6 +10,7 @@
     <script src="storage.js"></script>
     <script src="parse.js"></script>
     <script src="calculator.js"></script>
+    <script src="export.js"></script>
 
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
@@ -82,9 +83,10 @@
              </div>
          </div>
          <div class="col-auto">
-             <button type="button" id="importBtn" class="btn btn-outline-secondary">Import</button>
-             <button type="button" id="exportBtn" class="btn btn-outline-secondary">Export</button>
-             <input type="file" id="jsonFileInput" accept=".json" style="display: none;">
+              <button type="button" id="importBtn" class="btn btn-outline-secondary">Import</button>
+              <button type="button" id="exportBtn" class="btn btn-outline-secondary">Export</button>
+              <button type="button" id="exportExcelBtn" class="btn btn-outline-secondary">Export to Excel</button>
+              <input type="file" id="jsonFileInput" accept=".json" style="display: none;">
          </div>
      </div>
      

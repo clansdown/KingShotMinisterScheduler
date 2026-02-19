@@ -1382,6 +1382,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Event listeners for Import/Export
     document.getElementById('exportBtn').addEventListener('click', exportSchedulerData);
+    document.getElementById('exportExcelBtn').addEventListener('click', exportToExcel);
 
     const importBtn = document.getElementById('importBtn');
     const jsonFileInput = document.getElementById('jsonFileInput');
