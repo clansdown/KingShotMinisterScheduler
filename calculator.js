@@ -260,7 +260,10 @@ function assignInitialMinisters(day, players, speedupProp, assignmentFlag, sched
     assignFirstPass(unscheduled, slots, assignedPlayerSlots);
 
     // Round 2: Displacement
-    performDisplacement(unscheduled, assignedPlayerSlots, (p) => p[speedupProp]);
+    const evaluator = speedupProp === CONSTRUCTION
+        ? (p) => (p[CONSTRUCTION] * 43200) + (p[TRUEGOLD_PIECES] * 2000)
+        : (p) => p[speedupProp];
+    performDisplacement(unscheduled, assignedPlayerSlots, evaluator);
 
     // Finalize Assignments
     const taken = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
