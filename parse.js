@@ -45,16 +45,81 @@ function timeToMinutes(time) {
 
 /**
  * Extracts and normalizes a time string to HH:MM format, handling am/pm.
- * @param {string} timeStr - Time string, e.g., "19", "19:30", "2am", "9pm".
+ * Supported formats:
+ * - HH:MM (colon separator, e.g., "19:30", "9:05")
+ * - HH.MM (period separator, requires 2-digit minutes, e.g., "19.30", "9.30")
+ * - HHhMM (lowercase h separator, requires 2-digit minutes, e.g., "19h30", "9h30")
+ * - HHMM (military time, requires exactly 4 digits, e.g., "1430", "0930")
+ * - HH (hour only, e.g., "19", "9")
+ * - HHam/pm, HH:MMam/pm, HH.MMam/pm, HHhMMam/pm, HHMMam/pm (with am/pm suffix)
+ * @param {string} timeStr - Time string in any supported format.
  * @returns {string} Normalized time in HH:MM format, or null if invalid.
  */
 function extractTimeWithAmPm(timeStr) {
-    const match = timeStr.match(/(\d{1,2})(?::(\d{2}))?(?:am|pm|AM|PM)?/i);
-    if (!match) return null;
+    if (!timeStr || typeof timeStr !== 'string') return null;
 
-    let h = parseInt(match[1], 10);
-    const m = match[2] ? parseInt(match[2], 10) : 0;
-    const ampm = match[3] ? match[3].toLowerCase() : null;
+    const trimmed = timeStr.trim().toLowerCase();
+    if (trimmed === '') return null;
+
+    let h = 0;
+    let m = 0;
+    let ampm = null;
+
+    // Check for am/pm suffix
+    const ampmMatch = trimmed.match(/(am|pm)$/);
+    if (ampmMatch) {
+        ampm = ampmMatch[1];
+    }
+
+    // Try to match different formats
+
+    // Format 1: HHMM (military time) - exactly 4 digits required
+    const militaryMatch = trimmed.match(/^(\d{4})(am|pm)?$/);
+    if (militaryMatch) {
+        h = parseInt(militaryMatch[1].substring(0, 2), 10);
+        m = parseInt(militaryMatch[1].substring(2, 4), 10);
+        // Validate hour and minute ranges (allow h=24 only if m=0)
+        if (h > 24 || m > 59) return null;
+        if (h === 24 && m !== 0) return null;
+    } else {
+        // Format 2: HHhMM (lowercase h separator) - requires 2-digit minutes
+        const hSeparatorMatch = trimmed.match(/^(\d{1,2})h(\d{2})(am|pm)?$/);
+        if (hSeparatorMatch) {
+            h = parseInt(hSeparatorMatch[1], 10);
+            m = parseInt(hSeparatorMatch[2], 10);
+            if (h > 24 || m > 59) return null;
+            if (h === 24 && m !== 0) return null;
+        } else {
+            // Format 3: HH.MM (period separator) - requires 2-digit minutes
+            const periodMatch = trimmed.match(/^(\d{1,2})\.(\d{2})(am|pm)?$/);
+            if (periodMatch) {
+                h = parseInt(periodMatch[1], 10);
+                m = parseInt(periodMatch[2], 10);
+                if (h > 24 || m > 59) return null;
+                if (h === 24 && m !== 0) return null;
+            } else {
+                // Format 4: HH:MM (colon separator) - standard format
+                const colonMatch = trimmed.match(/^(\d{1,2}):(\d{2})(am|pm)?$/);
+                if (colonMatch) {
+                    h = parseInt(colonMatch[1], 10);
+                    m = parseInt(colonMatch[2], 10);
+                    if (h > 24 || m > 59) return null;
+                    if (h === 24 && m !== 0) return null;
+                } else {
+                    // Format 5: HH (hour only) or HHam/pm
+                    const hourMatch = trimmed.match(/^(\d{1,2})(am|pm)?$/);
+                    if (hourMatch) {
+                        h = parseInt(hourMatch[1], 10);
+                        m = 0;
+                        if (h > 24) return null;
+                        if (h === 24 && m !== 0) return null;
+                    } else {
+                        return null;
+                    }
+                }
+            }
+        }
+    }
 
     // Handle am/pm (assume 24h unless specified)
     if (ampm === 'pm' && h !== 12) h += 12;
@@ -70,17 +135,28 @@ function extractTimeWithAmPm(timeStr) {
 
 /**
  * Normalizes a time string to HH:MM format, clamping hours to 0-23.
- * Used by calculator.js for form input normalization.
- * @param {string} timeStr - Time string, e.g., "19" or "19:30".
+ * Treats 24:00, 24.00, 24h00, 2400 as midnight (00:00).
+ * @param {string} timeStr - Time string, e.g., "19", "19:30", "24:00".
  * @returns {string} Normalized time in HH:MM format.
  */
 function normalizeTime(timeStr) {
     if (!timeStr) return '00:00';
+    
+    const trimmed = timeStr.trim().toLowerCase();
+    
+    // Handle 24:00, 24.00, 24h00, 2400 as midnight
+    if (trimmed === '24:00' || trimmed === '24.00' || trimmed === '24h00' || trimmed === '2400') {
+        return '00:00';
+    }
+    
     let [h, m] = timeStr.split(':').map(Number);
     if (isNaN(h)) h = 0;
     if (isNaN(m)) m = 0;
-    h = Math.max(0, Math.min(23, h)); // Clamp to 0-23
-    m = Math.max(0, Math.min(59, m)); // Clamp minutes to 0-59
+    
+    // Handle 24 as midnight
+    if (h === 24) h = 0;
+    h = Math.max(0, Math.min(23, h));
+    m = Math.max(0, Math.min(59, m));
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 }
 
@@ -308,10 +384,13 @@ function parseCsvToObjects(csvText) {
             const allTimes = player[ALL_TIMES];
 
             // Validate time slot start/end format if present
-            if (start && !/^\d{1,2}(:\d{2})?$/.test(start)) {
+            // Accepts: HH:MM, HH.MM, HHhMM, HHMM (military), HH
+            // Also accepts 24:00, 24.00, 24h00, 2400 (equivalent to 00:00)
+            const timeFormatRegex = /^(24[0:.\h]?00|\d{4}|\d{1,2}(?::\d{2}|\.\d{2}|h\d{2})?)$/;
+            if (start && !timeFormatRegex.test(start)) {
                  throw new Error(`Invalid format for '${TIME_SLOT_START_UTC}': "${start}"`);
             }
-            if (end && !/^\d{1,2}(:\d{2})?$/.test(end)) {
+            if (end && !timeFormatRegex.test(end)) {
                  throw new Error(`Invalid format for '${TIME_SLOT_END_UTC}': "${end}"`);
             }
 
