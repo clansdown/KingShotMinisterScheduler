@@ -65,6 +65,7 @@ const DEBUG = true;
  * @property {number} lastModifiedTimeMS - Last modification timestamp in epoch milliseconds.
  * @property {number} constructionKingDay - The day construction speedups are king-prioritized (default 1).
  * @property {number} researchKingDay - The day research speedups are king-prioritized (default 2).
+ * @property {Array<string>} errors - Array of error messages for user display.
  */
 
 /**
@@ -77,6 +78,7 @@ const schedulerData = {
     assignments: { 1: {ministers: [], advisors: []}, 2: {ministers: [], advisors: []}, 3: {ministers: [], advisors: []}, 4: {ministers: [], advisors: []}, 5: {ministers: [], advisors: []} },
     waitingLists: { 1: [], 2: [], 4: [], 5: [] },
     filteredOut: [],
+    errors: [],
     constructionAssignments: {},
     researchAssignments: {},
     trainingAssignments: {},
@@ -87,6 +89,45 @@ const schedulerData = {
     researchKingDay: 2,
     currentDay: 0
 };
+
+/**
+ * Adds an error message to the schedulerData.errors array.
+ * @param {string} errorMessage - The error message to add.
+ */
+function addError(errorMessage) {
+    if (!schedulerData.errors) {
+        schedulerData.errors = [];
+    }
+    schedulerData.errors.push(errorMessage);
+}
+
+/**
+ * Clears all errors from schedulerData.errors array.
+ * Should be called on fresh CSV import only.
+ */
+function clearErrors() {
+    schedulerData.errors = [];
+}
+
+/**
+ * Updates the errorBox UI to display all current errors.
+ * Deduplicates errors and formats with numbering.
+ */
+function updateErrorDisplay() {
+    const errorBoxWrapper = document.getElementById('errorBoxWrapper');
+    const dataErrors = schedulerData.errors || [];
+    
+    if (dataErrors.length === 0) {
+        errorBoxWrapper.style.display = 'none';
+        return;
+    }
+    
+    const uniqueErrors = [...new Set(dataErrors)];
+    const errorMessages = uniqueErrors.map((e, index) => `${index + 1}. ${e}`).join('\n');
+    
+    document.getElementById('errorBoxText').textContent = errorMessages;
+    errorBoxWrapper.style.display = 'block';
+}
 
 // Constants for CSV field names are imported from parse.js
 
@@ -563,9 +604,12 @@ function isSlotAvailable(player, slotStart, slotEnd) {
     const slotDuration = slotEndMin >= slotStartMin ? slotEndMin - slotStartMin : (1440 - slotStartMin) + slotEndMin;
     const ranges = player.availableTimeRanges;
 
-    // If no specific ranges, no constraints
+    // If no specific ranges, treat as unavailable (this should not happen if validation works correctly)
     if (ranges.length === 0) {
-        return true;
+        const alliance = player[ALLIANCE] || 'Unknown';
+        const playerName = player[PLAYER] || 'Unknown';
+        addError(`Player ${playerName} (${alliance}) has no available time ranges. Treating as unavailable.`);
+        return false;
     }
 
     // Compute overall window from all ranges
@@ -1038,7 +1082,7 @@ function validateAndAssignUnassignedPlayers(schedulerData, minHours, spilloverDa
         if (isFilteredOut) return;
 
         const totalSpeedups = getAllSpeedupsSum(player);
-        console.error(`Unassigned player ${alliance}/${playerName} (total speedups: ${totalSpeedups}) not found in assignments, waiting lists, or filtered out.`);
+        addError(`Unassigned player ${alliance}/${playerName} (total speedups: ${totalSpeedups}) not found in assignments, waiting lists, or filtered out. This indicates a data integrity issue.`);
 
         if (totalSpeedups >= minHours) {
             const waitingPlayer = {
@@ -1134,21 +1178,7 @@ function renderUI(data, scrollToTop = false, errors = []) {
         populateDailyWaitingList(parseInt(day), players);
     });
 
-    const errorBox = document.getElementById('errorBox');
-    // @ts-ignore
-    const dataErrors = data.errors || [];
-    const allErrors = errors.concat(dataErrors);
-    // Deduplicate
-    const uniqueErrors = [...new Set(allErrors)];
-    
-    if (uniqueErrors.length > 0) {
-        errorBox.innerHTML = '<h4>CSV Parsing Errors:</h4><ol>' + uniqueErrors.map(e => '<li>' + e + '</li>').join('') + '</ol>';
-        errorBox.classList.remove('d-none');
-        errorBox.style.display = 'block';
-    } else {
-        errorBox.style.display = 'none';
-        errorBox.classList.add('d-none');
-    }
+    updateErrorDisplay();
 
     if (scrollToTop) {
         document.getElementById('day1HeadingWrapper').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1169,11 +1199,13 @@ function renderUI(data, scrollToTop = false, errors = []) {
  * @param {Array<string>} [errors=[]] - Parsing errors.
  */
 async function processAndSchedule(players, errors = []) {
+    clearErrors();
     calculateScheduleData(players, errors, false);
     try {
         await saveSchedulerData(schedulerData);
     } catch (e) {
         console.error("Failed to save scheduler data to storage", e);
+        addError("Failed to save scheduler data. Please check browser storage permissions.");
     }
     renderUI(schedulerData, false, errors);
 }
@@ -1197,6 +1229,7 @@ async function recalculateSchedule() {
         await saveSchedulerData(schedulerData);
     } catch (e) {
         console.error("Failed to save scheduler data", e);
+        addError("Failed to save scheduler data. Please check browser storage permissions.");
     }
 
     renderUI(schedulerData, false, []);
@@ -1461,6 +1494,19 @@ function submitAddPlayer() {
     // @ts-ignore
     const overallRanges = parseTimeRanges(`${newPlayer[TIME_SLOT_START_UTC]}-${newPlayer[TIME_SLOT_END_UTC]}`);
     newPlayer.availableTimeRanges = unionTimeRanges(overallRanges.concat(newPlayer.availableTimeRanges));
+
+    // Validate time ranges
+    // @ts-ignore
+    if (newPlayer.availableTimeRanges.length === 0) {
+        const alliance = formData.get('alliance') || 'Unknown';
+        const playerName = formData.get('player') || 'Unknown';
+        document.getElementById('assignmentNotificationText').textContent = 
+            `No valid time formats found for player ${playerName} (${alliance}).`;
+        const alert = document.getElementById('assignmentNotification');
+        alert.className = 'alert alert-danger alert-dismissible fade show';
+        alert.style.display = 'block';
+        return;
+    }
 
     // 1. Allocate General Speedups
     // @ts-ignore
@@ -1733,6 +1779,7 @@ function submitAddPlayer() {
         await saveSchedulerData(schedulerData);
     } catch (e) {
         console.error("Save failed", e);
+        addError("Failed to save scheduler data. Please check browser storage permissions.");
     }
     renderUI(schedulerData);
     
@@ -1746,6 +1793,7 @@ function submitAddPlayer() {
     
     // Show notification
     const alert = document.getElementById('assignmentNotification');
+    alert.className = 'alert alert-success alert-dismissible fade show';
     document.getElementById('assignmentNotificationText').textContent = message;
     alert.style.display = 'block';
 }
@@ -1835,6 +1883,18 @@ function submitEditPlayer() {
     const overallRanges = parseTimeRanges(`${updatedPlayer[TIME_SLOT_START_UTC]}-${updatedPlayer[TIME_SLOT_END_UTC]}`);
     updatedPlayer.availableTimeRanges = unionTimeRanges(overallRanges.concat(updatedPlayer.availableTimeRanges));
 
+    // Validate time ranges
+    if (updatedPlayer.availableTimeRanges.length === 0) {
+        const alliance = formData.get('alliance') || 'Unknown';
+        const playerName = formData.get('player') || 'Unknown';
+        document.getElementById('assignmentNotificationText').textContent = 
+            `No valid time formats found for player ${playerName} (${alliance}).`;
+        const alert = document.getElementById('assignmentNotification');
+        alert.className = 'alert alert-danger alert-dismissible fade show';
+        alert.style.display = 'block';
+        return;
+    }
+
     allocateGeneralSpeedups(updatedPlayer);
 
     const rawIndex = schedulerData.rawPlayers.findIndex(p => `${p[PLAYER]}-${p[ALLIANCE]}` === originalKey);
@@ -1852,6 +1912,7 @@ function submitEditPlayer() {
             await saveSchedulerData(schedulerData);
         } catch (e) {
             console.error("Save failed", e);
+            addError("Failed to save scheduler data. Please check browser storage permissions.");
         }
         renderUI(schedulerData);
 

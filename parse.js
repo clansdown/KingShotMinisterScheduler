@@ -421,6 +421,11 @@ function parseCsvToObjects(csvText) {
                 player.availableTimeRanges = parseTimeRanges(allTimes);
             }
 
+            // Validate that at least one valid time range was found
+            if (player.availableTimeRanges.length === 0) {
+                throw new Error('No valid time formats found.');
+            }
+
             // Validate that player name is present
             if (!player[PLAYER] || player[PLAYER].trim() === '') {
                 errors.push(`Line ${lineNumber}: Missing required 'Player' field. Raw line: "${rawLine}"`);
