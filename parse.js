@@ -196,7 +196,7 @@ function parseTimeRanges(allTimes) {
 
     // Regex patterns
     const TIME_PATTERN = /(\d{1,2})(?::(\d{2}))?(?:am|pm|AM|PM)?/gi;
-    const RANGE_DELIMITER = /\s*(?:[-–—]|(?:to|till|until|through|thru)(?:\s+times?)?)\s*/gi;
+    const RANGE_DELIMITER = /\s*(?:[-–—/]|(?:to|till|until|through|thru)(?:\s+times?)?)\s*/gi;
 
     // Remove common noise words that are not range or section delimiters
     const cleaned = allTimes.replace(/(?:at|from|between|start(?:ing)?|end(?:ing)?|hours|avail(?:ability)?|free|can\s+play)\s*/gi, '');
