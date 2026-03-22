@@ -8,6 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
     <script>document.documentElement.setAttribute('data-bs-theme', 'dark');</script>
     <script src="storage.js"></script>
+    <script src="utils.js"></script>
     <script src="parse.js"></script>
     <script src="calculator.js"></script>
     <script src="export.js"></script>
@@ -86,6 +87,7 @@
               <button type="button" id="importBtn" class="btn btn-outline-secondary">Import</button>
               <button type="button" id="exportBtn" class="btn btn-outline-secondary">Export</button>
               <button type="button" id="exportExcelBtn" class="btn btn-outline-secondary">Export to Excel</button>
+               <button type="button" id="exportHtmlBtn" class="btn btn-outline-secondary">Export to HTML</button>
               <input type="file" id="jsonFileInput" accept=".json" style="display: none;">
          </div>
      </div>
@@ -99,7 +101,7 @@
                         <strong class="me-3">Schedule Settings:</strong>
                         <div class="input-group me-3">
                             <span class="input-group-text">Min Days</span>
-                            <input type="number" id="minHoursInput" class="form-control" min="0" value="20" data-bs-toggle="tooltip" title="Minimum speedups (hours) required for Construction + Research combined, or for Soldier Training, to include the player in scheduling.">
+                            <input type="number" id="minHoursInput" class="form-control" min="0" value="10" data-bs-toggle="tooltip" title="Minimum speedups (hours) required for Construction + Research combined, or for Soldier Training, to include the player in scheduling.">
                         </div>
                         <div class="input-group me-3">
                             <label for="constructionKingDay" class="input-group-text">Construction King Day</label>
@@ -190,6 +192,7 @@
         </div>
     </div>
 
+<div id="appointmentsContent">
 <div class="day-section" id="day1Section" style="display: none;">
            <div id="day1HeadingWrapper" style="padding-top: 20px;">
                 <div class="row mb-2">
@@ -243,7 +246,7 @@
            </div>
       </div>
 
-<div class="day-section" style="display: none;">
+<div class="day-section" id="day2Section" style="display: none;">
            <div class="row mb-2">
                <div class="col">
                    <h2>Day 2 Appointments (Chief Minister)</h2>
@@ -296,7 +299,7 @@
 
 
 
-<div class="day-section" style="display: none;">
+<div class="day-section" id="day4Section" style="display: none;">
            <div class="row mb-2">
                <div class="col">
                    <h2>Day 4 Appointments (Noble Advisor)</h2>
@@ -347,10 +350,10 @@
            </div>
       </div>
 
-<div class="day-section" style="display: none;">
-            <div class="row mb-2">
-                <div class="col">
-                    <h2>Day 5 Appointments (Chief Minister)</h2>
+<div class="day-section" id="day5Section" style="display: none;">
+             <div class="row mb-2">
+                 <div class="col">
+                     <h2>Day 5 Appointments (Chief Minister)</h2>
                 </div>
                 <div class="col-auto">
                     <button class="btn btn-sm btn-outline-primary" onclick="openMessagesModal(5, 'ministers')">Messages</button>
@@ -394,18 +397,17 @@
              <div id="day5WaitingSection" style="display: none;">
                  <h5>Day 5 Waiting Players</h5>
                  <ol id="day5WaitingList"></ol>
-             </div>
-           </div>
-      </div>
+              </div>
+            </div>
+       </div>
+</div>
 
+<div class="day-section" id="filteredUsersSection" style="display: none;">
+     <h2>Filtered Out Users (did not meet minimum hours requirement)</h2>
+    <ol id="filteredUsersList"></ol>
+</div>
 
-
-      <div class="day-section" id="filteredUsersSection" style="display: none;">
-           <h2>Filtered Out Users (did not meet minimum hours requirement)</h2>
-          <ol id="filteredUsersList"></ol>
-      </div>
-
-     <div id="playerInfoSection" class="day-section mt-5" style="display: none;"></div>
+<div id="playerInfoSection" class="day-section mt-5" style="display: none;"></div>
 
     <!-- Add Player Modal -->
     <div class="modal fade" id="addPlayerModal" tabindex="-1" aria-hidden="true">

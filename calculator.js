@@ -82,7 +82,7 @@ const schedulerData = {
     constructionAssignments: {},
     researchAssignments: {},
     trainingAssignments: {},
-    minHours: 20,
+    minHours: 10,
     creationTimeMS: 0,
     lastModifiedTimeMS: 0,
     constructionKingDay: 1,
@@ -652,8 +652,58 @@ function isSlotAvailable(player, slotStart, slotEnd) {
 
 
 /**
+ * Builds HTML for message blocks from an array of appointments.
+ * Groups appointments into blocks of max 500 chars or 10 lines.
+ * @param {Array<Appointment>} appointments - Array of appointment objects.
+ * @returns {string} HTML string for message blocks with data-text attributes.
+ */
+function buildMessageBlocksHTML(appointments) {
+    if (appointments.length === 0) {
+        return '<p>No assignments to display.</p>';
+    }
+
+    const lines = appointments.map(app => `${app.start} ${app.alliance}/${app.player}`);
+    const blocks = [];
+    let currentBlock = '';
+    let currentBlockLineCount = 0;
+
+    lines.forEach(line => {
+        const lineWithNewline = line + '\n';
+        const wouldExceedLineLimit = (currentBlockLineCount + 1) > 10;
+        const wouldExceedCharLimit = (currentBlock.length + lineWithNewline.length) > 499;
+        if (currentBlock.length > 0 && (wouldExceedLineLimit || wouldExceedCharLimit)) {
+            blocks.push(currentBlock.trimEnd());
+            currentBlock = lineWithNewline;
+            currentBlockLineCount = 1;
+        } else if (currentBlock.length === 0 && wouldExceedCharLimit) {
+            currentBlock = lineWithNewline;
+            currentBlockLineCount = 1;
+        } else {
+            currentBlock += lineWithNewline;
+            currentBlockLineCount++;
+        }
+    });
+    if (currentBlock.length > 0) {
+        blocks.push(currentBlock.trimEnd());
+    }
+
+    let html = '';
+    blocks.forEach(block => {
+        const escapedText = block.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+        html += '<div class="message-block" data-text="' + escapedText + '">';
+        html += '<div class="border p-3 mb-3"><div class="row"><div class="col"><pre>' + block + '</pre></div>';
+        html += '<div class="col-auto text-end d-flex align-items-start">';
+        html += '<button class="btn btn-sm" onclick="copyExportMessage(this)">📋</button>';
+        html += '</div></div></div></div>';
+    });
+
+    return html;
+}
+
+/**
  * Updates the schedule tables and waiting list in the UI.
  * Populates minister tables for days 1, 2, 4, 5 and noble advisor tables for the same days.
+ * Also creates hidden message containers for HTML export.
  * @param {Assignments} assignments - Object with day keys and role-specific appointment arrays.
  */
 function updateScheduleTables(assignments) {
@@ -662,10 +712,12 @@ function updateScheduleTables(assignments) {
         if (assignments[day] && assignments[day].ministers) {
             assignments[day].ministers.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
             populateTable(`day${day}MinisterTable`, assignments[day].ministers);
+            createMessageContainer(day, 'ministers', assignments[day].ministers);
         }
         if (assignments[day] && assignments[day].advisors) {
             assignments[day].advisors.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
             populateTable(`day${day}NobleTable`, assignments[day].advisors);
+            createMessageContainer(day, 'advisors', assignments[day].advisors);
         }
         if (day !== 3) {
             const secondSectionId = day === 4 ? `day${day}MinisterSection` : `day${day}NobleSection`;
@@ -675,6 +727,34 @@ function updateScheduleTables(assignments) {
             }
         }
     });
+}
+
+/**
+ * Creates or updates a hidden container with pre-rendered message blocks.
+ * @param {number} day - The day number (1, 2, 4, or 5).
+ * @param {string} role - Either 'ministers' or 'advisors'.
+ * @param {Array<Appointment>} appointments - Array of appointment objects.
+ * @param {HTMLElement} [target] - Optional target element to append container to. Defaults to document.body.
+ */
+function createMessageContainer(day, role, appointments, target) {
+    const containerId = `day${day}${role === 'ministers' ? 'Minister' : 'Advisor'}Messages`;
+
+    if (target) {
+        const container = document.createElement('div');
+        container.id = containerId;
+        container.style.display = 'none';
+        container.innerHTML = buildMessageBlocksHTML(appointments);
+        target.appendChild(container);
+    } else {
+        let container = document.getElementById(containerId);
+        if (!container) {
+            container = document.createElement('div');
+            container.id = containerId;
+            container.style.display = 'none';
+            document.body.appendChild(container);
+        }
+        container.innerHTML = buildMessageBlocksHTML(appointments);
+    }
 }
 
 /**
@@ -977,7 +1057,7 @@ function populateDebugTable(players) {
  * @param {boolean} [isRecalculate=false] - If true, preserves rawPlayers and creationTimeMS (for recalculate).
  */
 function calculateScheduleData(players, errors = [], isRecalculate = false) {
-    const minHours = parseInt(document.getElementById('minHoursInput').value) || 20;
+    const minHours = parseInt(document.getElementById('minHoursInput').value) || 10;
     const constructDay = parseInt(document.getElementById('constructionKingDay').value) || 1;
     const researchDay = parseInt(document.getElementById('researchKingDay').value) || 2;
     const now = Date.now();
@@ -1278,7 +1358,7 @@ function loadSchedulerSystem(data) {
     // Update UI inputs
     const minHoursInput = document.getElementById('minHoursInput');
     if (minHoursInput) {
-        minHoursInput.value = data.minHours || 20;
+        minHoursInput.value = data.minHours || 10;
     }
     const constructionDayInput = document.getElementById('constructionKingDay');
     if (constructionDayInput) {
@@ -1398,11 +1478,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (file) {
             document.getElementById('loadingIndicator').style.display = 'block';
             // Reset error box
-            const errorBox = document.getElementById('errorBox');
-            if (errorBox) {
-                errorBox.style.display = 'none';
-                errorBox.classList.add('d-none');
-                errorBox.innerHTML = '';
+            const errorBoxWrapper = document.getElementById('errorBoxWrapper');
+            if (errorBoxWrapper) {
+                errorBoxWrapper.style.display = 'none';
             }
             
             const reader = new FileReader();
@@ -1419,6 +1497,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event listeners for Import/Export
     document.getElementById('exportBtn').addEventListener('click', exportSchedulerData);
     document.getElementById('exportExcelBtn').addEventListener('click', exportToExcel);
+    document.getElementById('exportHtmlBtn').addEventListener('click', exportToHtml);
 
     const importBtn = document.getElementById('importBtn');
     const jsonFileInput = document.getElementById('jsonFileInput');

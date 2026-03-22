@@ -1,4 +1,305 @@
 /**
+ * Creates a modal element for the export.
+ * @param {string} modalId - The modal ID.
+ * @param {string} title - The modal title.
+ * @param {string} contentHTML - The HTML content for the modal body.
+ * @returns {HTMLElement} The modal element.
+ */
+function createExportModal(modalId, title, contentHTML) {
+    var modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.id = modalId;
+    modal.setAttribute('tabindex', '-1');
+    modal.setAttribute('aria-hidden', 'true');
+
+    var dialog = document.createElement('div');
+    dialog.className = 'modal-dialog modal-lg';
+
+    var content = document.createElement('div');
+    content.className = 'modal-content';
+
+    var header = document.createElement('div');
+    header.className = 'modal-header';
+
+    var titleEl = document.createElement('h5');
+    titleEl.className = 'modal-title';
+    titleEl.textContent = title;
+
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'btn-close';
+    closeBtn.setAttribute('data-bs-dismiss', 'modal');
+    closeBtn.setAttribute('aria-label', 'Close');
+
+    var body = document.createElement('div');
+    body.className = 'modal-body';
+    body.innerHTML = contentHTML;
+
+    header.appendChild(titleEl);
+    header.appendChild(closeBtn);
+    content.appendChild(header);
+    content.appendChild(body);
+    dialog.appendChild(content);
+    modal.appendChild(dialog);
+
+    return modal;
+}
+
+/**
+ * Exports all scheduler tables and waiting lists to a standalone HTML file.
+ */
+function exportToHtml() {
+    var appointmentsContent = document.getElementById('appointmentsContent');
+    if (!appointmentsContent) {
+        alert('No appointments to export. Please process a CSV file first.');
+        return;
+    }
+
+    var clone = appointmentsContent.cloneNode(true);
+
+    var dayContents = clone.querySelectorAll('.day-content');
+    dayContents.forEach(function(el) {
+        el.style.display = '';
+    });
+
+    var daySections = clone.querySelectorAll('.day-section');
+    daySections.forEach(function(el) {
+        el.style.display = '';
+    });
+
+    var toggleButtons = clone.querySelectorAll('button[id^="toggleDay"]');
+    toggleButtons.forEach(function(btn) {
+        btn.style.display = 'none';
+    });
+
+    // Keep only Appointment Time and Alliance/Player columns
+    var tables = clone.querySelectorAll('table');
+    tables.forEach(function(table) {
+        // Remove header columns after column 1
+        var headerRow = table.querySelector('thead tr');
+        if (headerRow) {
+            var headers = headerRow.querySelectorAll('th');
+            for (var i = headers.length - 1; i >= 2; i--) {
+                headers[i].remove();
+            }
+        }
+
+        // Remove body columns after column 1
+        var bodyRows = table.querySelectorAll('tbody tr');
+        bodyRows.forEach(function(row) {
+            var cells = row.querySelectorAll('td');
+            for (var i = cells.length - 1; i >= 2; i--) {
+                cells[i].remove();
+            }
+        });
+    });
+
+    var waitingSections = clone.querySelectorAll('[id$="WaitingSection"]');
+    waitingSections.forEach(function(section) {
+        if (section.style.display === 'none') {
+            section.style.display = 'block';
+        }
+    });
+
+    // Day 1 Minister button
+    var btn = clone.querySelector('button[onclick="openMessagesModal(1, \'ministers\')"]');
+    if (btn) {
+        btn.setAttribute('data-bs-toggle', 'modal');
+        btn.setAttribute('data-bs-target', '#day1MinisterMessagesModal');
+        btn.removeAttribute('onclick');
+    }
+
+    // Day 1 Advisor button
+    btn = clone.querySelector('button[onclick="openMessagesModal(1, \'advisors\')"]');
+    if (btn) {
+        btn.setAttribute('data-bs-toggle', 'modal');
+        btn.setAttribute('data-bs-target', '#day1AdvisorMessagesModal');
+        btn.removeAttribute('onclick');
+    }
+
+    // Day 2 Minister button
+    btn = clone.querySelector('button[onclick="openMessagesModal(2, \'ministers\')"]');
+    if (btn) {
+        btn.setAttribute('data-bs-toggle', 'modal');
+        btn.setAttribute('data-bs-target', '#day2MinisterMessagesModal');
+        btn.removeAttribute('onclick');
+    }
+
+    // Day 2 Advisor button
+    btn = clone.querySelector('button[onclick="openMessagesModal(2, \'advisors\')"]');
+    if (btn) {
+        btn.setAttribute('data-bs-toggle', 'modal');
+        btn.setAttribute('data-bs-target', '#day2AdvisorMessagesModal');
+        btn.removeAttribute('onclick');
+    }
+
+    // Day 4 Minister button
+    btn = clone.querySelector('button[onclick="openMessagesModal(4, \'ministers\')"]');
+    if (btn) {
+        btn.setAttribute('data-bs-toggle', 'modal');
+        btn.setAttribute('data-bs-target', '#day4MinisterMessagesModal');
+        btn.removeAttribute('onclick');
+    }
+
+    // Day 4 Advisor button
+    btn = clone.querySelector('button[onclick="openMessagesModal(4, \'advisors\')"]');
+    if (btn) {
+        btn.setAttribute('data-bs-toggle', 'modal');
+        btn.setAttribute('data-bs-target', '#day4AdvisorMessagesModal');
+        btn.removeAttribute('onclick');
+    }
+
+    // Day 5 Minister button
+    btn = clone.querySelector('button[onclick="openMessagesModal(5, \'ministers\')"]');
+    if (btn) {
+        btn.setAttribute('data-bs-toggle', 'modal');
+        btn.setAttribute('data-bs-target', '#day5MinisterMessagesModal');
+        btn.removeAttribute('onclick');
+    }
+
+    // Day 5 Advisor button
+    btn = clone.querySelector('button[onclick="openMessagesModal(5, \'advisors\')"]');
+    if (btn) {
+        btn.setAttribute('data-bs-toggle', 'modal');
+        btn.setAttribute('data-bs-target', '#day5AdvisorMessagesModal');
+        btn.removeAttribute('onclick');
+    }
+
+    // Day 1 modals
+    var day1Section = clone.querySelector('#day1Section');
+    if (day1Section) {
+        if (schedulerData.assignments[1] && schedulerData.assignments[1].ministers && schedulerData.assignments[1].ministers.length > 0) {
+            var modal = createExportModal(
+                'day1MinisterMessagesModal',
+                'Day 1 Chief Minister Messages',
+                buildMessageBlocksHTML(schedulerData.assignments[1].ministers)
+            );
+            day1Section.insertAdjacentElement('afterend', modal);
+        }
+        if (schedulerData.assignments[1] && schedulerData.assignments[1].advisors && schedulerData.assignments[1].advisors.length > 0) {
+            var modal = createExportModal(
+                'day1AdvisorMessagesModal',
+                'Day 1 Noble Advisor Messages',
+                buildMessageBlocksHTML(schedulerData.assignments[1].advisors)
+            );
+            day1Section.insertAdjacentElement('afterend', modal);
+        }
+    }
+
+    // Day 2 modals
+    var day2Section = clone.querySelector('#day2Section');
+    if (day2Section) {
+        if (schedulerData.assignments[2] && schedulerData.assignments[2].ministers && schedulerData.assignments[2].ministers.length > 0) {
+            var modal = createExportModal(
+                'day2MinisterMessagesModal',
+                'Day 2 Chief Minister Messages',
+                buildMessageBlocksHTML(schedulerData.assignments[2].ministers)
+            );
+            day2Section.insertAdjacentElement('afterend', modal);
+        }
+        if (schedulerData.assignments[2] && schedulerData.assignments[2].advisors && schedulerData.assignments[2].advisors.length > 0) {
+            var modal = createExportModal(
+                'day2AdvisorMessagesModal',
+                'Day 2 Noble Advisor Messages',
+                buildMessageBlocksHTML(schedulerData.assignments[2].advisors)
+            );
+            day2Section.insertAdjacentElement('afterend', modal);
+        }
+    }
+
+    // Day 4 modals
+    var day4Section = clone.querySelector('#day4Section');
+    if (day4Section) {
+        if (schedulerData.assignments[4] && schedulerData.assignments[4].ministers && schedulerData.assignments[4].ministers.length > 0) {
+            var modal = createExportModal(
+                'day4MinisterMessagesModal',
+                'Day 4 Chief Minister Messages',
+                buildMessageBlocksHTML(schedulerData.assignments[4].ministers)
+            );
+            day4Section.insertAdjacentElement('afterend', modal);
+        }
+        if (schedulerData.assignments[4] && schedulerData.assignments[4].advisors && schedulerData.assignments[4].advisors.length > 0) {
+            var modal = createExportModal(
+                'day4AdvisorMessagesModal',
+                'Day 4 Noble Advisor Messages',
+                buildMessageBlocksHTML(schedulerData.assignments[4].advisors)
+            );
+            day4Section.insertAdjacentElement('afterend', modal);
+        }
+    }
+
+    // Day 5 modals
+    var day5Section = clone.querySelector('#day5Section');
+    if (day5Section) {
+        if (schedulerData.assignments[5] && schedulerData.assignments[5].ministers && schedulerData.assignments[5].ministers.length > 0) {
+            var modal = createExportModal(
+                'day5MinisterMessagesModal',
+                'Day 5 Chief Minister Messages',
+                buildMessageBlocksHTML(schedulerData.assignments[5].ministers)
+            );
+            day5Section.insertAdjacentElement('afterend', modal);
+        }
+        if (schedulerData.assignments[5] && schedulerData.assignments[5].advisors && schedulerData.assignments[5].advisors.length > 0) {
+            var modal = createExportModal(
+                'day5AdvisorMessagesModal',
+                'Day 5 Noble Advisor Messages',
+                buildMessageBlocksHTML(schedulerData.assignments[5].advisors)
+            );
+            day5Section.insertAdjacentElement('afterend', modal);
+        }
+    }
+
+    var inlineStyles = '<style>\n' +
+        'body { font-family: Arial, sans-serif; margin: 20px; }\n' +
+        '.day-section { margin-bottom: 30px; }\n' +
+        'thead th {\n' +
+        '    position: sticky;\n' +
+        '    top: 0;\n' +
+        '    background-color: var(--bs-body-bg);\n' +
+        '    z-index: 1;\n' +
+        '}\n' +
+        '.message-block { cursor: pointer; }\n' +
+        '</style>\n';
+
+    var exportJS = '<script>\n' +
+        'function copyExportMessage(btn) {\n' +
+        '    var block = btn.closest(".message-block");\n' +
+        '    var text = block.getAttribute("data-text");\n' +
+        '    navigator.clipboard.writeText(text).catch(function(e) { console.log("Copy failed: " + e); });\n' +
+        '}\n' +
+        '</script>\n';
+
+    var html = '<!DOCTYPE html>\n' +
+        '<html lang="en" data-bs-theme="dark">\n' +
+        '<head>\n' +
+        '<meta charset="UTF-8">\n' +
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n' +
+        '<title>KingShot Minister Scheduler - Appointments</title>\n' +
+        '<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">\n' +
+        inlineStyles +
+        '</head>\n' +
+        '<body>\n' +
+        '<h1>KingShot Minister Scheduler - Appointments</h1>\n' +
+        clone.outerHTML +
+        exportJS +
+        '<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>\n' +
+        '</body>\n' +
+        '</html>';
+
+    var blob = new Blob([html], { type: 'text/html' });
+    var url = URL.createObjectURL(blob);
+
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'kingshot_appointments.html';
+    document.body.appendChild(a);
+    a.click();
+
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+/**
  * Exports all scheduler tables and waiting lists to an Excel 2003 XML file.
  */
 function exportToExcel() {

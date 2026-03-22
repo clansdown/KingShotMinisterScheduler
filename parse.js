@@ -288,6 +288,20 @@ function addRangeIfValid(ranges, start, end) {
 }
 
 /**
+ * Normalizes a header name by removing trailing colons and mapping aliases.
+ * @param {string} header - The raw header name.
+ * @returns {string} Normalized header name.
+ */
+function normalizeHeader(header) {
+    let normalized = header.toLowerCase().trim();
+    normalized = normalized.replace(/:$/, '');
+    if (normalized === 'username') {
+        normalized = 'player';
+    }
+    return normalized;
+}
+
+/**
  * Parses a CSV text into an array of objects, handling quoted fields and auto-detecting delimiter (comma or tab).
  * @param {string} csvText - The raw CSV text from the file.
  * @returns {{players: Array<PlayerObject>, errors: Array<string>}} Object containing array of player objects and array of error strings.
@@ -335,6 +349,7 @@ function parseCsvToObjects(csvText) {
     }
 
     const headers = parseCsvLine(firstLine, delimiter);
+    const normalizedHeaders = headers.map(normalizeHeader);
     const playerMap = new Map();
     const errors = [];
 
@@ -343,24 +358,28 @@ function parseCsvToObjects(csvText) {
         const lineNumber = i + 1; // 1-based line number for user (header is line 1)
         const rawLine = lines[i];
 
-        if (fields.length < headers.length) {
-            errors.push(`Line ${lineNumber}: Field count mismatch - expected at least ${headers.length} fields, got ${fields.length}. Raw line: "${rawLine}"`);
+        // Skip completely blank rows (all fields empty)
+        const isBlankRow = fields.every(field => field.trim() === '');
+        if (isBlankRow) continue;
+
+        if (fields.length < normalizedHeaders.length) {
+            errors.push(`Line ${lineNumber}: Field count mismatch - expected at least ${normalizedHeaders.length} fields, got ${fields.length}. Raw line: "${rawLine}"`);
             continue;
         }
 
         const player = {};
         let lineHasError = false;
 
-        headers.forEach((header, index) => {
+        normalizedHeaders.forEach((header, index) => {
             if (index < fields.length) {
-                player[header.toLowerCase().trim()] = fields[index];
+                player[header] = fields[index];
             }
         });
 
         // Convert numeric fields and validate
         const numericFields = [GENERAL_SPEEDUPS, SOLDIER_TRAINING, CONSTRUCTION, RESEARCH, TRUEGOLD_PIECES];
         numericFields.forEach(field => {
-            const originalVal = player[field].trim();
+            const originalVal = player[field]?.trim() ?? '';
             const lowerVal = originalVal.toLowerCase();
             if (lowerVal === 'na' || lowerVal === 'n/a') {
                 player[field] = 0;
