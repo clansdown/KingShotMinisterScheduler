@@ -662,7 +662,7 @@ function buildMessageBlocksHTML(appointments) {
         return '<p>No assignments to display.</p>';
     }
 
-    const lines = appointments.map(app => `${app.start} ${app.alliance}/${app.player}`);
+    const lines = appointments.map(app => `${app.start} [${app.alliance}]${app.player}`);
     const blocks = [];
     let currentBlock = '';
     let currentBlockLineCount = 0;
@@ -779,14 +779,14 @@ function populateTable(tableId, appointments) {
             const row = tbody.insertRow();
             row.insertCell(0).textContent = `${appointment.start}–${appointment.end}`;
             const playerCell = row.insertCell(1);
-            playerCell.textContent = `${appointment.alliance}/${appointment.player}`;
+            playerCell.textContent = `[${appointment.alliance}]${appointment.player}`;
             // Add tooltip with detailed player info on hover
             const player = schedulerData.processedPlayers.find(p => p[PLAYER] === appointment.player && p[ALLIANCE] === appointment.alliance);
             if (player) {
                 const timeSlots = player.availableTimeRanges && player.availableTimeRanges.length > 0
                     ? player.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ')
                     : 'No available ranges';
-                playerCell.title = `${appointment.alliance}/${appointment.player} - T:${Math.round(player[SOLDIER_TRAINING])} C:${Math.round(player[CONSTRUCTION])} R:${Math.round(player[RESEARCH])} TG:${Math.round(player[TRUEGOLD_PIECES])} - Time Slots: ${timeSlots}`;
+                playerCell.title = `[${appointment.alliance}]${appointment.player} - T:${Math.round(player[SOLDIER_TRAINING])} C:${Math.round(player[CONSTRUCTION])} R:${Math.round(player[RESEARCH])} TG:${Math.round(player[TRUEGOLD_PIECES])} - Time Slots: ${timeSlots}`;
             } else {
                 playerCell.title = 'Player details unavailable';
             }
@@ -842,7 +842,7 @@ function populateWaitingList(waiting) {
         waiting.forEach(player => {
             const li = document.createElement('li');
             li.className = 'mb-2';
-            li.textContent = `${player.alliance}/${player.player} - T:${player.speedups.soldier} C:${player.speedups.construction} R:${player.speedups.research} TG:${player.truegold} - Time Slots: ${player.timeSlots} `;
+            li.textContent = `[${player.alliance}]${player.player} - T:${player.speedups.soldier} C:${player.speedups.construction} R:${player.speedups.research} TG:${player.truegold} - Time Slots: ${player.timeSlots} `;
             
             // Assign Button
             const assignBtn = document.createElement('button');
@@ -874,7 +874,7 @@ function populateDailyWaitingList(day, waiting) {
         waiting.forEach(player => {
             const li = document.createElement('li');
             li.className = 'mb-2';
-            li.textContent = `${player.alliance}/${player.player} - T:${player.speedups.soldier} C:${player.speedups.construction} R:${player.speedups.research} TG:${player.truegold} - Time Slots: ${player.timeSlots} `;
+            li.textContent = `[${player.alliance}]${player.player} - T:${player.speedups.soldier} C:${player.speedups.construction} R:${player.speedups.research} TG:${player.truegold} - Time Slots: ${player.timeSlots} `;
             
             // Assign Button
             const assignBtn = document.createElement('button');
@@ -1162,7 +1162,7 @@ function validateAndAssignUnassignedPlayers(schedulerData, minHours, spilloverDa
         if (isFilteredOut) return;
 
         const totalSpeedups = getAllSpeedupsSum(player);
-        addError(`Unassigned player ${alliance}/${playerName} (total speedups: ${totalSpeedups}) not found in assignments, waiting lists, or filtered out. This indicates a data integrity issue.`);
+        addError(`Unassigned player [${alliance}]${playerName} (total speedups: ${totalSpeedups}) not found in assignments, waiting lists, or filtered out. This indicates a data integrity issue.`);
 
         if (totalSpeedups >= minHours) {
             const waitingPlayer = {
@@ -2020,7 +2020,7 @@ function openRemoveUserModal() {
     allPlayers.forEach(p => {
         const option = document.createElement('option');
         option.value = `${p.player}-${p.alliance}`;
-        option.textContent = `${p.alliance} / ${p.player}`;
+        option.textContent = `[${p.alliance}]${p.player}`;
         select.appendChild(option);
     });
     
@@ -2071,7 +2071,7 @@ let currentReassignTarget = null; // { day, role, existingSlotStart, existingSlo
 function openAssignmentModal(alliance, player, existing = null) {
     currentReassignTarget = existing ? { ...existing, alliance, player } : { alliance, player };
     
-    const title = existing ? `Reassign ${alliance}/${player}` : `Assign ${alliance}/${player}`;
+    const title = existing ? `Reassign [${alliance}]${player}` : `Assign [${alliance}]${player}`;
     document.getElementById('assignmentModalTitle').textContent = title;
     
     updateAssignmentSlots();
@@ -2099,8 +2099,8 @@ function openMessagesModal(day, role) {
         return;
     }
 
-    // Build list of "Alliance/Player" strings
-    const lines = assignments.map(app => `${app.start} ${app.alliance}/${app.player}`);
+    // Build list of "[Alliance]Player" strings
+    const lines = assignments.map(app => `${app.start} [${app.alliance}]${app.player}`);
 
     // Group into blocks <500 chars and max 10 lines
     const blocks = [];
@@ -2306,7 +2306,7 @@ function performAssignment(day, role, start, end) {
         }
     }
 
-    finishManagementAction(`Assigned ${alliance}/${player} to Day ${day} ${role === 'ministers' ? 'Chief Minister' : 'Noble Advisor'} (${start}-${end}).`);
+    finishManagementAction(`Assigned [${alliance}]${player} to Day ${day} ${role === 'ministers' ? 'Chief Minister' : 'Noble Advisor'} (${start}-${end}).`);
 }
 
 /**
@@ -2389,5 +2389,5 @@ function removeAssignment(day, role, start, alliance, player) {
         }
     }
 
-    finishManagementAction(`Removed assignment for ${alliance}/${player}.`);
+    finishManagementAction(`Removed assignment for [${alliance}]${player}.`);
 }

@@ -400,7 +400,7 @@ function generateMinisterHeaders(day) {
             speedupsHeader = 'Construction / Research / Training';
             break;
     }
-    return ['Appointment Time', 'Alliance/Player', speedupsHeader, 'TrueGold'];
+    return ['Appointment Time', '[Alliance]Player', speedupsHeader, 'TrueGold'];
 }
 
 /**
@@ -408,7 +408,7 @@ function generateMinisterHeaders(day) {
  * @returns {Array<string>} Array of header strings.
  */
 function generateNobleHeaders() {
-    return ['Appointment Time', 'Alliance/Player', 'Training Speedups'];
+    return ['Appointment Time', '[Alliance]Player', 'Training Speedups'];
 }
 
 /**
@@ -501,7 +501,7 @@ function extractWaitingListWorksheet(listId, day) {
     var list = document.getElementById(listId);
     if (!list) return null;
 
-    var headers = ['Alliance/Player', 'Training Speedups', 'Construction', 'Research', 'TrueGold', 'Time Slots'];
+    var headers = ['[Alliance]Player', 'Training Speedups', 'Construction', 'Research', 'TrueGold', 'Time Slots'];
     var worksheetName = 'Day ' + day + ' Waiting List';
     var rows = [];
 
