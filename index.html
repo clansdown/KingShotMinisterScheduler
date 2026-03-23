@@ -511,7 +511,7 @@
                         <div class="col-md-6">
                             <label class="form-label">Day</label>
                              <select class="form-select" id="assignDaySelect" onchange="updateAssignmentSlots()">
-<option value="1">Day 1</option>
+ <option value="1">Day 1</option>
                                   <option value="2">Day 2</option>
                                   <option value="4">Day 4</option>
                                   <option value="5">Day 5</option>
@@ -525,16 +525,24 @@
                             </select>
                         </div>
                     </div>
-                    <h6>Available Slots</h6>
-                    <p class="text-muted small">Green slots match player's preferences.</p>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" id="showAllSlotsToggle" onchange="updateAssignmentSlots()">
-                        <label class="form-check-label" for="showAllSlotsToggle">
-                            Show All Available Slots (ignore schedule)
-                        </label>
+                    <div id="playerSelectContainer" class="mb-3" style="display: none;">
+                        <label class="form-label">Select Player</label>
+                        <select class="form-select" id="assignPlayerSelect" onchange="onPlayerSelectedForAssignment()">
+                            <option value="">-- Select a player --</option>
+                        </select>
                     </div>
-                    <div id="assignmentSlotsContainer" class="list-group" style="max-height: 300px; overflow-y: auto;">
-                        <!-- Slots populated by JS -->
+                    <div id="slotsSection">
+                        <h6>Available Slots</h6>
+                        <p class="text-muted small">Green slots match player's preferences.</p>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="showAllSlotsToggle" onchange="updateAssignmentSlots()">
+                            <label class="form-check-label" for="showAllSlotsToggle">
+                                Show All Available Slots (ignore schedule)
+                            </label>
+                        </div>
+                        <div id="assignmentSlotsContainer" class="list-group" style="max-height: 300px; overflow-y: auto;">
+                            <!-- Slots populated by JS -->
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">

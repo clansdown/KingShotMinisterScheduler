@@ -758,26 +758,37 @@ function createMessageContainer(day, role, appointments, target) {
 }
 
 /**
- * Populates a table with appointment data.
+ * Populates a table with appointment data, showing all 48 time slots.
+ * Unfilled slots show empty cells with an Assign button.
  * @param {string} tableId - The ID of the table element.
  * @param {Array<Appointment>} appointments - Array of appointment objects.
  */
 function populateTable(tableId, appointments) {
     const tbody = document.querySelector(`#${tableId} tbody`);
     tbody.innerHTML = '';
-    if (appointments.length === 0) {
-        const row = tbody.insertRow();
-        const cell = row.insertCell(0);
-        cell.textContent = 'No appointments.';
-        cell.colSpan = tableId.includes('Noble') ? 4 : 5; // Updated colspan for extra action column
-    } else {
-        const dayMatch = tableId.match(/day(\d+)/);
-        const day = dayMatch ? parseInt(dayMatch[1]) : 0;
-        const role = tableId.includes('Minister') ? 'ministers' : 'advisors';
 
-        appointments.forEach(appointment => {
-            const row = tbody.insertRow();
-            row.insertCell(0).textContent = `${appointment.start}–${appointment.end}`;
+    const dayMatch = tableId.match(/day(\d+)/);
+    const day = dayMatch ? parseInt(dayMatch[1]) : 0;
+    const role = tableId.includes('Minister') ? 'ministers' : 'advisors';
+    const isNoble = tableId.includes('Noble');
+
+    // Generate all 48 time slots
+    const allSlots = generateTimeSlots();
+
+    // Create appointment lookup map by start time
+    const appointmentMap = new Map();
+    appointments.forEach(app => appointmentMap.set(app.start, app));
+
+    // Populate rows for all slots
+    allSlots.forEach(slot => {
+        const appointment = appointmentMap.get(slot.start);
+        const row = tbody.insertRow();
+
+        // Time slot column
+        row.insertCell(0).textContent = `${slot.start}–${slot.end}`;
+
+        if (appointment) {
+            // Filled slot
             const playerCell = row.insertCell(1);
             playerCell.textContent = `[${appointment.alliance}]${appointment.player}`;
             // Add tooltip with detailed player info on hover
@@ -791,14 +802,13 @@ function populateTable(tableId, appointments) {
                 playerCell.title = 'Player details unavailable';
             }
             row.insertCell(2).textContent = appointment.speedups;
-            if (!tableId.includes('Noble')) {
+            if (!isNoble) {
                 row.insertCell(3).textContent = appointment.truegold;
             }
-            
-            // Actions Column
-            const actionsCell = row.insertCell(tableId.includes('Noble') ? 3 : 4);
-            
-            // Reassign Button
+
+            // Actions Column with Reassign/Remove buttons
+            const actionsCell = row.insertCell(isNoble ? 3 : 4);
+
             const reassignBtn = document.createElement('button');
             reassignBtn.className = 'btn btn-sm btn-outline-primary me-1';
             reassignBtn.textContent = '🔃';
@@ -809,16 +819,36 @@ function populateTable(tableId, appointments) {
                 existingSlotEnd: appointment.end
             });
             actionsCell.appendChild(reassignBtn);
-            
-            // Remove Button (X)
+
             const removeBtn = document.createElement('button');
             removeBtn.className = 'btn btn-sm btn-outline-danger';
-            removeBtn.innerHTML = '&#10060;'; // Unicode X
+            removeBtn.innerHTML = '&#10060;';
             removeBtn.title = 'Remove Assignment';
             removeBtn.onclick = () => removeAssignment(day, role, appointment.start, appointment.alliance, appointment.player);
             actionsCell.appendChild(removeBtn);
-        });
-    }
+        } else {
+            // Empty slot
+            row.insertCell(1).textContent = '';
+            row.insertCell(2).textContent = '';
+            if (!isNoble) {
+                row.insertCell(3).textContent = '';
+            }
+
+            // Actions Column with Assign button
+            const actionsCell = row.insertCell(isNoble ? 3 : 4);
+
+            const assignBtn = document.createElement('button');
+            assignBtn.className = 'btn btn-sm btn-outline-success';
+            assignBtn.textContent = 'Assign';
+            assignBtn.onclick = () => openAssignmentModal(null, null, {
+                day: day,
+                role: role,
+                slotStart: slot.start,
+                slotEnd: slot.end
+            });
+            actionsCell.appendChild(assignBtn);
+        }
+    });
 
     // Update header to add "Actions" column if not already there
     const thead = document.querySelector(`#${tableId} thead tr`);
@@ -2064,19 +2094,100 @@ let currentReassignTarget = null; // { day, role, existingSlotStart, existingSlo
 
 /**
  * Opens the assignment modal.
- * @param {string} alliance 
- * @param {string} player 
+ * @param {string|null} alliance
+ * @param {string|null} player
  * @param {Object} [existing] - If reassigning, details of the current slot.
+ *                             May include slotStart/slotEnd for empty slot assignment.
  */
 function openAssignmentModal(alliance, player, existing = null) {
     currentReassignTarget = existing ? { ...existing, alliance, player } : { alliance, player };
-    
-    const title = existing ? `Reassign [${alliance}]${player}` : `Assign [${alliance}]${player}`;
+
+    let title;
+    if (alliance && player) {
+        title = existing && existing.existingSlotStart ? `Reassign [${alliance}]${player}` : `Assign [${alliance}]${player}`;
+    } else if (existing && existing.slotStart) {
+        title = `Assign to ${existing.slotStart}–${existing.slotEnd}`;
+    } else {
+        title = 'Assign';
+    }
     document.getElementById('assignmentModalTitle').textContent = title;
-    
-    updateAssignmentSlots();
+
+    // Set day/role selects to match the target slot
+    if (existing && existing.day) {
+        document.getElementById('assignDaySelect').value = existing.day;
+    }
+    if (existing && existing.role) {
+        document.getElementById('assignRoleSelect').value = existing.role;
+    }
+
+    // Show player dropdown if no player pre-selected, otherwise show slots
+    const playerSelectContainer = document.getElementById('playerSelectContainer');
+    const slotsSection = document.getElementById('slotsSection');
+    const playerSelect = document.getElementById('assignPlayerSelect');
+
+    if (alliance && player) {
+        // Player is pre-selected (reassign), hide player dropdown
+        playerSelectContainer.style.display = 'none';
+        slotsSection.style.display = 'block';
+        updateAssignmentSlots();
+    } else {
+        // No player pre-selected (empty slot assignment), show player dropdown
+        playerSelectContainer.style.display = 'block';
+        slotsSection.style.display = 'none';
+        populatePlayerSelect();
+    }
+
     // @ts-ignore
     new bootstrap.Modal(document.getElementById('assignmentModal')).show();
+}
+
+/**
+ * Populates the player dropdown with eligible players.
+ */
+function populatePlayerSelect() {
+    const playerSelect = document.getElementById('assignPlayerSelect');
+    playerSelect.innerHTML = '<option value="">-- Select a player --</option>';
+
+    const day = parseInt(document.getElementById('assignDaySelect').value);
+    const role = document.getElementById('assignRoleSelect').value;
+
+    schedulerData.processedPlayers.forEach(p => {
+        // Check qualification
+        let qualified = false;
+        if (role === 'ministers') {
+            if ((p[CONSTRUCTION] + p[RESEARCH]) >= schedulerData.minHours) qualified = true;
+            if (day === 4 && p[SOLDIER_TRAINING] >= schedulerData.minHours) qualified = true;
+        } else {
+            if (p[SOLDIER_TRAINING] >= schedulerData.minHours) qualified = true;
+        }
+
+        if (qualified) {
+            const option = document.createElement('option');
+            option.value = `${p[ALLIANCE]}|${p[PLAYER]}`;
+            option.textContent = `[${p[ALLIANCE]}]${p[PLAYER]}`;
+            playerSelect.appendChild(option);
+        }
+    });
+}
+
+/**
+ * Called when a player is selected from the dropdown for assignment.
+ */
+function onPlayerSelectedForAssignment() {
+    const playerSelect = document.getElementById('assignPlayerSelect');
+    const value = playerSelect.value;
+
+    if (value) {
+        const [alliance, player] = value.split('|');
+        currentReassignTarget.alliance = alliance;
+        currentReassignTarget.player = player;
+        document.getElementById('slotsSection').style.display = 'block';
+        updateAssignmentSlots();
+    } else {
+        currentReassignTarget.alliance = null;
+        currentReassignTarget.player = null;
+        document.getElementById('slotsSection').style.display = 'none';
+    }
 }
 
 /**
@@ -2173,12 +2284,19 @@ function updateAssignmentSlots() {
     const role = document.getElementById('assignRoleSelect').value; // 'ministers' or 'advisors'
     const container = document.getElementById('assignmentSlotsContainer');
     container.innerHTML = '';
-    
+
     // Get target player object
-    const targetId = currentReassignTarget.player + '-' + currentReassignTarget.alliance;
-    const playerObj = schedulerData.processedPlayers.find(p => `${p.player}-${p.alliance}` === targetId);
-    
-    if (!playerObj) return;
+    const targetId = currentReassignTarget.player && currentReassignTarget.alliance
+        ? currentReassignTarget.player + '-' + currentReassignTarget.alliance
+        : null;
+    const playerObj = targetId
+        ? schedulerData.processedPlayers.find(p => `${p.player}-${p.alliance}` === targetId)
+        : null;
+
+    if (!playerObj) {
+        container.innerHTML = '<div class="p-3 text-muted">Select a player to see available slots.</div>';
+        return;
+    }
 
     // Get taken slots
     const currentAssignments = schedulerData.assignments[day][role];
