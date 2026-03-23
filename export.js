@@ -94,6 +94,25 @@ function exportToHtml() {
         });
     });
 
+    // Simplify waiting list entries to just [Alliance]Player
+    var waitingLists = clone.querySelectorAll('ol[id$="WaitingList"]');
+    waitingLists.forEach(function(list) {
+        var items = list.querySelectorAll('li');
+        items.forEach(function(li) {
+            var text = li.textContent.trim();
+            // Extract just [Alliance]Player (before " - ")
+            var dashIndex = text.indexOf(' - ');
+            if (dashIndex > 0) {
+                text = text.substring(0, dashIndex);
+            }
+            // Remove all child elements (buttons)
+            while (li.firstChild) {
+                li.removeChild(li.firstChild);
+            }
+            li.textContent = text;
+        });
+    });
+
     var waitingSections = clone.querySelectorAll('[id$="WaitingSection"]');
     waitingSections.forEach(function(section) {
         if (section.style.display === 'none') {
