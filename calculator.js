@@ -1486,8 +1486,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Current day selector event listener
-    document.getElementById('currentDaySelect').addEventListener('change', function() {
+    document.getElementById('currentDaySelect').addEventListener('change', async function() {
         schedulerData.currentDay = parseInt(this.value);
+        await saveSchedulerData(schedulerData);
     });
 
     // Player Form modal and copy functionality
@@ -1659,11 +1660,14 @@ function submitAddPlayer() {
     /** @type {Array<{day: number, role: string, slotStr: string}>} */
     const assignmentsMade = [];
 
+    // Get construction/research king days once
+    const constructDay = parseInt(document.getElementById('constructionKingDay').value) || 1;
+    const researchDay = parseInt(document.getElementById('researchKingDay').value) || 2;
+    const slots = generateTimeSlots();
+
     // Attempt Construction buff
-    if (newPlayer[CONSTRUCTION] >= minHours && !schedulerData.constructionAssignments[playerId]) {
-        const constructDay = parseInt(document.getElementById('constructionKingDay').value) || 1;
+    if (constructDay > schedulerData.currentDay && newPlayer[CONSTRUCTION] >= minHours && !schedulerData.constructionAssignments[playerId]) {
         const taken = new Set(schedulerData.assignments[constructDay].ministers.map(a => a.start));
-        const slots = generateTimeSlots();
         for (const slot of slots) {
             // @ts-ignore
             if (!taken.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
@@ -1687,7 +1691,7 @@ function submitAddPlayer() {
     }
     // Fallback to other days in 1,2,5
     if (!schedulerData.constructionAssignments[playerId]) {
-        const fallbackDays = [1, 2, 5].filter(d => d !== constructDay);
+        const fallbackDays = [1, 2, 5].filter(d => d !== constructDay && d > schedulerData.currentDay);
         for (const day of fallbackDays) {
             const takenFallback = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
             for (const slot of slots) {
@@ -1715,10 +1719,8 @@ function submitAddPlayer() {
     }
 
     // Attempt Research buff
-    if (newPlayer[RESEARCH] >= minHours && !schedulerData.researchAssignments[playerId]) {
-        const researchDay = parseInt(document.getElementById('researchKingDay').value) || 2;
+    if (researchDay > schedulerData.currentDay && newPlayer[RESEARCH] >= minHours && !schedulerData.researchAssignments[playerId]) {
         const taken = new Set(schedulerData.assignments[researchDay].ministers.map(a => a.start));
-        const slots = generateTimeSlots();
         for (const slot of slots) {
             // @ts-ignore
             if (!taken.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
@@ -1741,7 +1743,7 @@ function submitAddPlayer() {
         }
         // Fallback to other days in 1,2,5
         if (!schedulerData.researchAssignments[playerId]) {
-            const fallbackDays = [1, 2, 5].filter(d => d !== researchDay);
+            const fallbackDays = [1, 2, 5].filter(d => d !== researchDay && d > schedulerData.currentDay);
             for (const day of fallbackDays) {
                 const takenFallback = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
                 for (const slot of slots) {
@@ -1770,7 +1772,7 @@ function submitAddPlayer() {
     }
 
     // Attempt Advisor (Day 4)
-    if (newPlayer[SOLDIER_TRAINING] >= minHours && !schedulerData.trainingAssignments[playerId]) {
+    if (4 > schedulerData.currentDay && newPlayer[SOLDIER_TRAINING] >= minHours && !schedulerData.trainingAssignments[playerId]) {
         const day = 4;
         const advisorSlots = generateTimeSlots();
         const ministerSlots = generateTimeSlots(); // For overflow
@@ -2151,22 +2153,31 @@ function populatePlayerSelect() {
     const day = parseInt(document.getElementById('assignDaySelect').value);
     const role = document.getElementById('assignRoleSelect').value;
 
-    schedulerData.processedPlayers.forEach(p => {
-        // Check qualification
+    // Filter qualified players
+    const qualifiedPlayers = schedulerData.processedPlayers.filter(p => {
         let qualified = false;
         if (role === 'ministers') {
-            if ((p[CONSTRUCTION] + p[RESEARCH]) >= schedulerData.minHours) qualified = true;
-            if (day === 4 && p[SOLDIER_TRAINING] >= schedulerData.minHours) qualified = true;
+            if ((p?.[CONSTRUCTION] ?? 0) + (p?.[RESEARCH] ?? 0) >= schedulerData.minHours) qualified = true;
+            if (day === 4 && (p?.[SOLDIER_TRAINING] ?? 0) >= schedulerData.minHours) qualified = true;
         } else {
-            if (p[SOLDIER_TRAINING] >= schedulerData.minHours) qualified = true;
+            if ((p?.[SOLDIER_TRAINING] ?? 0) >= schedulerData.minHours) qualified = true;
         }
+        return qualified;
+    });
 
-        if (qualified) {
-            const option = document.createElement('option');
-            option.value = `${p[ALLIANCE]}|${p[PLAYER]}`;
-            option.textContent = `[${p[ALLIANCE]}]${p[PLAYER]}`;
-            playerSelect.appendChild(option);
-        }
+    // Sort by alliance, then by player name (case-insensitive, locale-aware)
+    qualifiedPlayers.sort((a, b) => {
+        const allianceCompare = (a?.[ALLIANCE] ?? '').localeCompare(b?.[ALLIANCE] ?? '', undefined, { sensitivity: 'base' });
+        if (allianceCompare !== 0) return allianceCompare;
+        return (a?.[PLAYER] ?? '').localeCompare(b?.[PLAYER] ?? '', undefined, { sensitivity: 'base' });
+    });
+
+    // Populate dropdown
+    qualifiedPlayers.forEach(p => {
+        const option = document.createElement('option');
+        option.value = `${p?.[ALLIANCE] ?? ''}|${p?.[PLAYER] ?? ''}`;
+        option.textContent = `[${p?.[ALLIANCE] ?? ''}]${p?.[PLAYER] ?? ''}`;
+        playerSelect.appendChild(option);
     });
 }
 
