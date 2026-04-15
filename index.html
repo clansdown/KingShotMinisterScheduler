@@ -17,9 +17,23 @@
         body { font-family: Arial, sans-serif; margin: 20px; }
         .day-section { margin-bottom: 30px; }
         input[type="file"] { margin-bottom: 10px; }
-        thead th {
+        .day-section h2 {
             position: sticky;
             top: 0;
+            background-color: var(--bs-body-bg);
+            z-index: 3;
+            padding-top: 10px;
+        }
+        .day-section h3 {
+            position: sticky;
+            top: 45px;
+            background-color: var(--bs-body-bg);
+            z-index: 2;
+            padding-top: 10px;
+        }
+        thead th {
+            position: sticky;
+            top: 90px;
             background-color: var(--bs-body-bg);
             z-index: 1;
         }
@@ -547,6 +561,31 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slot Assignment Modal -->
+    <div class="modal fade" id="slotAssignModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="slotAssignModalTitle">Assign Player</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="slotAssignAvailableOnly" checked onchange="populateSlotAssignPlayerList()">
+                        <label class="form-check-label" for="slotAssignAvailableOnly">Only show players available at this time</label>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="slotAssignExcludeAssigned" checked onchange="populateSlotAssignPlayerList()">
+                        <label class="form-check-label" for="slotAssignExcludeAssigned">Exclude players already assigned this day</label>
+                    </div>
+                    <div id="slotAssignPlayerList" class="list-group" style="max-height: 400px; overflow-y: auto;">
+                        <!-- Populated by JS -->
+                    </div>
                 </div>
             </div>
         </div>

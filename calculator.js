@@ -840,12 +840,7 @@ function populateTable(tableId, appointments) {
             const assignBtn = document.createElement('button');
             assignBtn.className = 'btn btn-sm btn-outline-success';
             assignBtn.textContent = 'Assign';
-            assignBtn.onclick = () => openAssignmentModal(null, null, {
-                day: day,
-                role: role,
-                slotStart: slot.start,
-                slotEnd: slot.end
-            });
+            assignBtn.onclick = () => openSlotAssignModal(day, role, slot.start, slot.end);
             actionsCell.appendChild(assignBtn);
         }
     });
@@ -1241,6 +1236,24 @@ function validateAndAssignUnassignedPlayers(schedulerData, minHours, spilloverDa
  * @param {Array<string>} [errors=[]] - Array of error strings to display.
  */
 /**
+ * Determines the role type for a given day.
+ * @param {number} day - The day number.
+ * @returns {string} The day role type: 'construction', 'research', 'training', or 'spillover'.
+ */
+function getDayRole(day) {
+    if (day === 4) {
+        return 'training';
+    }
+    if (day === schedulerData.constructionKingDay) {
+        return 'construction';
+    }
+    if (day === schedulerData.researchKingDay) {
+        return 'research';
+    }
+    return 'spillover';
+}
+
+/**
  * Updates the speedups column headers for all minister tables dynamically based on schedule roles.
  * Called once per renderUI to batch-update headers before table population.
  * @param {SchedulerData} schedulerData - The current schedule data.
@@ -1259,11 +1272,12 @@ function updateMinisterSpeedupsHeaders(schedulerData) {
             const speedupsHeaderId = `day${d}-minister-speedups-header`;
             const headerElement = document.getElementById(speedupsHeaderId);
             if (headerElement) {  // Exists in HTML
-                if (d === schedulerData.constructionKingDay) {
+                const dayRole = getDayRole(d);
+                if (dayRole === 'construction') {
                     headerElement.textContent = 'Construction';
-                } else if (d === schedulerData.researchKingDay) {
+                } else if (dayRole === 'research') {
                     headerElement.textContent = 'Research';
-                } else if (d === 4) {
+                } else if (dayRole === 'training') {
                     headerElement.textContent = 'Training';
                 } else if (d === spilloverDay) {
                     headerElement.textContent = 'Construction / Research / Training';
@@ -1276,8 +1290,42 @@ function updateMinisterSpeedupsHeaders(schedulerData) {
     });
 }
 
+/**
+ * Updates the speedups column headers for all noble advisor tables dynamically based on schedule roles.
+ * Called once per renderUI to batch-update headers before table population.
+ * @param {SchedulerData} schedulerData - The current schedule data.
+ */
+function updateNobleSpeedupsHeaders(schedulerData) {
+    if (!schedulerData || !schedulerData.constructionKingDay || !schedulerData.researchKingDay) {
+        console.warn('schedulerData not loaded; skipping noble header updates.');
+        return;
+    }
+
+    [1, 2, 4, 5].forEach(d => {
+        try {
+            const speedupsHeaderId = `day${d}-noble-speedups-header`;
+            const headerElement = document.getElementById(speedupsHeaderId);
+            if (headerElement) {
+                const dayRole = getDayRole(d);
+                if (dayRole === 'training') {
+                    headerElement.textContent = 'Training';
+                } else if (dayRole === 'construction') {
+                    headerElement.textContent = 'Construction';
+                } else if (dayRole === 'research') {
+                    headerElement.textContent = 'Research';
+                } else {
+                    headerElement.textContent = 'Training';
+                }
+            }
+        } catch (error) {
+            console.error(`Failed to update noble speedups header for day ${d}:`, error);
+        }
+    });
+}
+
 function renderUI(data, scrollToTop = false, errors = []) {
     updateMinisterSpeedupsHeaders(data);
+    updateNobleSpeedupsHeaders(data);
     populateDebugTable(data.rawPlayers);
     updateScheduleTables(data.assignments);
     updateFilteredList(data.filteredOut);
@@ -2374,38 +2422,56 @@ function performAssignment(day, role, start, end) {
     const targetId = `${player}-${alliance}`;
     const playerObj = schedulerData.processedPlayers.find(p => `${p.player}-${p.alliance}` === targetId);
 
-    // 1. If Reassigning, remove old assignment first
+    // 1. Remove any existing assignment for this player on this day (both roles)
+    schedulerData.assignments[day].ministers = schedulerData.assignments[day].ministers.filter(
+        a => !(a.alliance === alliance && a.player === player)
+    );
+    schedulerData.assignments[day].advisors = schedulerData.assignments[day].advisors.filter(
+        a => !(a.alliance === alliance && a.player === player)
+    );
+
+    // 2. If Reassigning within same day, remove old assignment from its old slot
     if (currentReassignTarget.existingSlotStart) {
         const oldDay = currentReassignTarget.day;
         const oldRole = currentReassignTarget.role;
-        // Remove from list
-        schedulerData.assignments[oldDay][oldRole] = schedulerData.assignments[oldDay][oldRole].filter(
-            a => !(a.start === currentReassignTarget.existingSlotStart && a.alliance === alliance && a.player === player)
-        );
+        if (oldDay !== day || oldRole !== role) {
+            schedulerData.assignments[oldDay][oldRole] = schedulerData.assignments[oldDay][oldRole].filter(
+                a => !(a.start === currentReassignTarget.existingSlotStart && a.alliance === alliance && a.player === player)
+            );
+        }
     } 
     // If Assigning from list, remove from waiting lists/filtered
     else {
-        Object.keys(schedulerData.waitingLists).forEach(day => {
-            schedulerData.waitingLists[day] = schedulerData.waitingLists[day].filter(p => !(`${p.player}-${p.alliance}` === targetId));
+        Object.keys(schedulerData.waitingLists).forEach(dayKey => {
+            schedulerData.waitingLists[dayKey] = schedulerData.waitingLists[dayKey].filter(p => !(`${p.player}-${p.alliance}` === targetId));
         });
         schedulerData.filteredOut = schedulerData.filteredOut.filter(p => !(`${p.player}-${p.alliance}` === targetId));
     }
 
-    // 2. Add new assignment
+    // 3. Add new assignment - speedups based on day type, not role
+    const dayRole = getDayRole(day);
+    let speedupsDisplay;
+    if (dayRole === 'construction') {
+        speedupsDisplay = Math.round(playerObj[CONSTRUCTION]);
+    } else if (dayRole === 'research') {
+        speedupsDisplay = Math.round(playerObj[RESEARCH]);
+    } else if (dayRole === 'training') {
+        speedupsDisplay = Math.round(playerObj[SOLDIER_TRAINING]);
+    } else {
+        speedupsDisplay = `${Math.round(playerObj[CONSTRUCTION])} / ${Math.round(playerObj[RESEARCH])} / ${Math.round(playerObj[SOLDIER_TRAINING])}`;
+    }
+    
     const newAssignment = {
         start: start,
         end: end,
         alliance: alliance,
         player: player,
-        // Calc speedups based on role
-        speedups: role === 'ministers' 
-            ? `${Math.round(playerObj[CONSTRUCTION])} / ${Math.round(playerObj[RESEARCH])}`
-            : Math.round(playerObj[SOLDIER_TRAINING]),
+        speedups: speedupsDisplay,
         truegold: playerObj[TRUEGOLD_PIECES]
     };
     schedulerData.assignments[day][role].push(newAssignment);
     
-    // 3. Update Tracking
+    // 4. Update Tracking
     const constructDay = schedulerData.constructionKingDay;
     const researchDay = schedulerData.researchKingDay;
 
@@ -2436,6 +2502,182 @@ function performAssignment(day, role, start, end) {
     }
 
     finishManagementAction(`Assigned [${alliance}]${player} to Day ${day} ${role === 'ministers' ? 'Chief Minister' : 'Noble Advisor'} (${start}-${end}).`);
+}
+
+/**
+ * @typedef {Object} SlotAssignTarget
+ * @property {number} day - Target day number.
+ * @property {string} role - Target role ('ministers' or 'advisors').
+ * @property {string} slotStart - Slot start time.
+ * @property {string} slotEnd - Slot end time.
+ */
+
+/** @type {SlotAssignTarget|null} */
+let currentSlotAssignTarget = null;
+
+/**
+ * Opens the slot assignment modal for selecting a player to assign to an empty slot.
+ * @param {number} day - Day number.
+ * @param {string} role - Role ('ministers' or 'advisors').
+ * @param {string} slotStart - Slot start time.
+ * @param {string} slotEnd - Slot end time.
+ */
+function openSlotAssignModal(day, role, slotStart, slotEnd) {
+    currentSlotAssignTarget = { day, role, slotStart, slotEnd };
+    
+    const roleLabel = role === 'ministers' ? 'Chief Minister' : 'Noble Advisor';
+    const title = `Assign to Day ${day} (${roleLabel}) - ${slotStart}–${slotEnd}`;
+    document.getElementById('slotAssignModalTitle').textContent = title;
+    
+    populateSlotAssignPlayerList();
+    
+    // @ts-ignore
+    new bootstrap.Modal(document.getElementById('slotAssignModal')).show();
+}
+
+/**
+ * Populates the player list in the slot assignment modal based on current filters.
+ */
+function populateSlotAssignPlayerList() {
+    if (!currentSlotAssignTarget) return;
+    
+    const { day, role, slotStart, slotEnd } = currentSlotAssignTarget;
+    const container = document.getElementById('slotAssignPlayerList');
+    const availableOnly = document.getElementById('slotAssignAvailableOnly').checked;
+    const excludeAssigned = document.getElementById('slotAssignExcludeAssigned').checked;
+    
+    container.innerHTML = '';
+    
+    const qualifiedPlayers = schedulerData.processedPlayers.filter(p => {
+        let qualified = false;
+        if (role === 'ministers') {
+            if ((p?.[CONSTRUCTION] ?? 0) + (p?.[RESEARCH] ?? 0) >= schedulerData.minHours) qualified = true;
+            if (day === 4 && (p?.[SOLDIER_TRAINING] ?? 0) >= schedulerData.minHours) qualified = true;
+        } else {
+            if ((p?.[SOLDIER_TRAINING] ?? 0) >= schedulerData.minHours) qualified = true;
+        }
+        if (!qualified) return false;
+        
+        // Check availability
+        if (availableOnly) {
+            const slotStartMinutes = timeToMinutes(slotStart);
+            const slotEndMinutes = timeToMinutes(slotEnd);
+            if (p.availableTimeRanges && p.availableTimeRanges.length > 0) {
+                const available = p.availableTimeRanges.some(range => {
+                    const rangeStart = timeToMinutes(range.start);
+                    const rangeEnd = timeToMinutes(range.end);
+                    return slotStartMinutes >= rangeStart && slotEndMinutes <= rangeEnd;
+                });
+                if (!available) return false;
+            } else {
+                return false;
+            }
+        }
+        
+        // Check if already assigned this day
+        if (excludeAssigned) {
+            const assigned = schedulerData.assignments[day].ministers.some(a => a.alliance === p[ALLIANCE] && a.player === p[PLAYER]) ||
+                           schedulerData.assignments[day].advisors.some(a => a.alliance === p[ALLIANCE] && a.player === p[PLAYER]);
+            if (assigned) return false;
+        }
+        
+        return true;
+    });
+    
+    // Sort by alliance, then by player name (case-insensitive, locale-aware)
+    qualifiedPlayers.sort((a, b) => {
+        const allianceCompare = (a?.[ALLIANCE] ?? '').localeCompare(b?.[ALLIANCE] ?? '', undefined, { sensitivity: 'base' });
+        if (allianceCompare !== 0) return allianceCompare;
+        return (a?.[PLAYER] ?? '').localeCompare(b?.[PLAYER] ?? '', undefined, { sensitivity: 'base' });
+    });
+    
+    if (qualifiedPlayers.length === 0) {
+        container.innerHTML = '<div class="p-3 text-muted">No qualified players match the current filters.</div>';
+        return;
+    }
+    
+    qualifiedPlayers.forEach(p => {
+        const item = document.createElement('button');
+        item.className = 'list-group-item list-group-item-action';
+        item.textContent = `[${p[ALLIANCE]}]${p[PLAYER]}`;
+        item.onclick = () => performSlotAssign(p[ALLIANCE], p[PLAYER]);
+        container.appendChild(item);
+    });
+}
+
+/**
+ * Performs the slot assignment - assigns the player directly to the slot.
+ * @param {string} alliance - Player's alliance.
+ * @param {string} player - Player's name.
+ */
+function performSlotAssign(alliance, player) {
+    if (!currentSlotAssignTarget) return;
+    
+    const { day, role, slotStart, slotEnd } = currentSlotAssignTarget;
+    const targetId = `${player}-${alliance}`;
+    const playerObj = schedulerData.processedPlayers.find(p => `${p.player}-${p.alliance}` === targetId);
+    
+    if (!playerObj) return;
+    
+    // Remove any existing assignment for this player on this day (both roles)
+    schedulerData.assignments[day].ministers = schedulerData.assignments[day].ministers.filter(
+        a => !(a.alliance === alliance && a.player === player)
+    );
+    schedulerData.assignments[day].advisors = schedulerData.assignments[day].advisors.filter(
+        a => !(a.alliance === alliance && a.player === player)
+    );
+    
+    // Calculate speedups based on day type
+    const dayRole = getDayRole(day);
+    let speedupsDisplay;
+    if (dayRole === 'construction') {
+        speedupsDisplay = Math.round(playerObj[CONSTRUCTION]);
+    } else if (dayRole === 'research') {
+        speedupsDisplay = Math.round(playerObj[RESEARCH]);
+    } else if (dayRole === 'training') {
+        speedupsDisplay = Math.round(playerObj[SOLDIER_TRAINING]);
+    } else {
+        speedupsDisplay = `${Math.round(playerObj[CONSTRUCTION])} / ${Math.round(playerObj[RESEARCH])} / ${Math.round(playerObj[SOLDIER_TRAINING])}`;
+    }
+    
+    // Add new assignment
+    const newAssignment = {
+        start: slotStart,
+        end: slotEnd,
+        alliance: alliance,
+        player: player,
+        speedups: speedupsDisplay,
+        truegold: playerObj[TRUEGOLD_PIECES]
+    };
+    schedulerData.assignments[day][role].push(newAssignment);
+    
+    // Update tracking flags
+    const constructDay = schedulerData.constructionKingDay;
+    const researchDay = schedulerData.researchKingDay;
+    
+    if (day === constructDay && role === 'ministers') {
+        schedulerData.constructionAssignments[targetId] = true;
+    } else if ((day === researchDay || day === 4) && role === 'ministers') {
+        schedulerData.researchAssignments[targetId] = true;
+    } else if (day === 4 && role === 'advisors') {
+        schedulerData.trainingAssignments[targetId] = true;
+    } else {
+        if (!schedulerData.constructionAssignments[targetId]) {
+            schedulerData.constructionAssignments[targetId] = true;
+        } else {
+            schedulerData.researchAssignments[targetId] = true;
+        }
+    }
+    
+    // Close modal and refresh
+    bootstrap.Modal.getInstance(document.getElementById('slotAssignModal')).hide();
+    currentSlotAssignTarget = null;
+    
+    updateScheduleTables(schedulerData.assignments);
+    saveSchedulerData(schedulerData);
+    
+    const roleLabel = role === 'ministers' ? 'Chief Minister' : 'Noble Advisor';
+    finishManagementAction(`Assigned [${alliance}]${player} to Day ${day} ${roleLabel} (${slotStart}–${slotEnd}).`);
 }
 
 /**

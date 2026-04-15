@@ -67,6 +67,12 @@ function exportToHtml() {
         el.style.display = '';
     });
 
+    // Strip title tooltips
+    var titledElements = clone.querySelectorAll('[title]');
+    titledElements.forEach(function(el) {
+        el.removeAttribute('title');
+    });
+
     var toggleButtons = clone.querySelectorAll('button[id^="toggleDay"]');
     toggleButtons.forEach(function(btn) {
         btn.style.display = 'none';
@@ -347,24 +353,6 @@ function exportToExcel() {
 
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-}
-
-/**
- * Determines the role type for a given day.
- * @param {number} day - The day number (1, 2, 4, or 5).
- * @returns {string} The day role type: 'construction', 'research', 'training', or 'spillover'.
- */
-function getDayRole(day) {
-    if (day === 4) {
-        return 'training';
-    }
-    if (day === schedulerData.constructionKingDay) {
-        return 'construction';
-    }
-    if (day === schedulerData.researchKingDay) {
-        return 'research';
-    }
-    return 'spillover';
 }
 
 /**
