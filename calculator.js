@@ -797,7 +797,7 @@ function populateTable(tableId, appointments) {
                 const timeSlots = player.availableTimeRanges && player.availableTimeRanges.length > 0
                     ? player.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ')
                     : 'No available ranges';
-                playerCell.title = `[${appointment.alliance}]${appointment.player} - T:${Math.round(player[SOLDIER_TRAINING])} C:${Math.round(player[CONSTRUCTION])} R:${Math.round(player[RESEARCH])} TG:${Math.round(player[TRUEGOLD_PIECES])} - Time Slots: ${timeSlots}`;
+                playerCell.title = `[${appointment.alliance}]${appointment.player} - ${formatPlayerSpeedups(player)} - Time Slots: ${timeSlots}`;
             } else {
                 playerCell.title = 'Player details unavailable';
             }
@@ -867,7 +867,7 @@ function populateWaitingList(waiting) {
         waiting.forEach(player => {
             const li = document.createElement('li');
             li.className = 'mb-2';
-            li.textContent = `[${player.alliance}]${player.player} - T:${player.speedups.soldier} C:${player.speedups.construction} R:${player.speedups.research} TG:${player.truegold} - Time Slots: ${player.timeSlots} `;
+            li.textContent = `[${player.alliance}]${player.player} - ${formatPlayerSpeedups(player)} - Time Slots: ${player.timeSlots} `;
             
             // Assign Button
             const assignBtn = document.createElement('button');
@@ -899,7 +899,7 @@ function populateDailyWaitingList(day, waiting) {
         waiting.forEach(player => {
             const li = document.createElement('li');
             li.className = 'mb-2';
-            li.textContent = `[${player.alliance}]${player.player} - T:${player.speedups.soldier} C:${player.speedups.construction} R:${player.speedups.research} TG:${player.truegold} - Time Slots: ${player.timeSlots} `;
+            li.textContent = `[${player.alliance}]${player.player} - ${formatPlayerSpeedups(player)} - Time Slots: ${player.timeSlots} `;
             
             // Assign Button
             const assignBtn = document.createElement('button');
@@ -926,7 +926,7 @@ function updateFilteredList(filteredOut) {
             const li = document.createElement('li');
             li.className = 'mb-2';
             // @ts-ignore
-            li.textContent = `${player[ALLIANCE]}/${player[PLAYER]} - T:${Math.round(player[SOLDIER_TRAINING])} C:${Math.round(player[CONSTRUCTION])} R:${Math.round(player[RESEARCH])} TG:${Math.round(player[TRUEGOLD_PIECES])} `;
+            li.textContent = `${player[ALLIANCE]}/${player[PLAYER]} - ${formatPlayerSpeedups(player)} `;
             
             // Assign Button
             const assignBtn = document.createElement('button');
@@ -1651,7 +1651,7 @@ function submitAddPlayer() {
     newPlayer.availableTimeRanges = parseTimeRanges(newPlayer[ALL_TIMES]);
     // @ts-ignore
     const overallRanges = parseTimeRanges(`${newPlayer[TIME_SLOT_START_UTC]}-${newPlayer[TIME_SLOT_END_UTC]}`);
-    newPlayer.availableTimeRanges = unionTimeRanges(overallRanges.concat(newPlayer.availableTimeRanges));
+    newPlayer.availableTimeRanges = mergeAdjacentRanges(unionTimeRanges(overallRanges.concat(newPlayer.availableTimeRanges)));
 
     // Validate time ranges
     // @ts-ignore
@@ -2040,7 +2040,7 @@ function submitEditPlayer() {
 
     updatedPlayer.availableTimeRanges = parseTimeRanges(updatedPlayer[ALL_TIMES]);
     const overallRanges = parseTimeRanges(`${updatedPlayer[TIME_SLOT_START_UTC]}-${updatedPlayer[TIME_SLOT_END_UTC]}`);
-    updatedPlayer.availableTimeRanges = unionTimeRanges(overallRanges.concat(updatedPlayer.availableTimeRanges));
+    updatedPlayer.availableTimeRanges = mergeAdjacentRanges(unionTimeRanges(overallRanges.concat(updatedPlayer.availableTimeRanges)));
 
     // Validate time ranges
     if (updatedPlayer.availableTimeRanges.length === 0) {
@@ -2599,7 +2599,7 @@ function populateSlotAssignPlayerList() {
     qualifiedPlayers.forEach(p => {
         const item = document.createElement('button');
         item.className = 'list-group-item list-group-item-action';
-        item.textContent = `[${p[ALLIANCE]}]${p[PLAYER]}`;
+        item.textContent = `[${p[ALLIANCE]}]${p[PLAYER]} - ${formatPlayerSpeedups(p)}`;
         item.onclick = () => performSlotAssign(p[ALLIANCE], p[PLAYER]);
         container.appendChild(item);
     });

@@ -32,3 +32,16 @@ function instantiateTemplate(templateId, parentId) {
 
     return firstChild;
 }
+
+/**
+ * Formats a player's speedups and truegold into a display string.
+ * Handles both PlayerObject (e.g. processedPlayers) and WaitingPlayer shapes.
+ * @param {Object} player - Player object (PlayerObject or WaitingPlayer).
+ * @returns {string} Formatted string like "T:5 C:3 R:10 TG:2".
+ */
+function formatPlayerSpeedups(player) {
+    if (player.speedups && typeof player.speedups === 'object') {
+        return `T:${player.speedups.soldier} C:${player.speedups.construction} R:${player.speedups.research} TG:${player.truegold}`;
+    }
+    return `T:${Math.round(player[SOLDIER_TRAINING])} C:${Math.round(player[CONSTRUCTION])} R:${Math.round(player[RESEARCH])} TG:${Math.round(player[TRUEGOLD_PIECES])}`;
+}

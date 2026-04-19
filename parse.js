@@ -181,10 +181,40 @@ function unionTimeRanges(ranges) {
 }
 
 /**
+ * Merges adjacent and overlapping time ranges into continuous ranges.
+ * Sorts by start time, then merges ranges where one's end >= next's start.
+ * @param {Array<TimeRange>} ranges - Array of time range objects.
+ * @returns {Array<TimeRange>} Merged array of time range objects.
+ */
+function mergeAdjacentRanges(ranges) {
+    if (ranges.length <= 1) {
+        return ranges;
+    }
+    const sorted = ranges.slice().sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+    /** @type {Array<TimeRange>} */
+    const merged = [sorted[0]];
+    for (let i = 1; i < sorted.length; i++) {
+        const current = sorted[i];
+        const last = merged[merged.length - 1];
+        const lastEndMin = timeToMinutes(last.end);
+        const currentStartMin = timeToMinutes(current.start);
+        if (currentStartMin <= lastEndMin) {
+            const newEndMin = Math.max(lastEndMin, timeToMinutes(current.end));
+            const endHour = Math.floor(newEndMin / 60) % 24;
+            const endMin = newEndMin % 60;
+            last.end = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`;
+        } else {
+            merged.push(current);
+        }
+    }
+    return merged;
+}
+
+/**
  * Parses the 'All Times' field into an array of time range objects.
  * Handles raw hours (e.g., "19" -> "19:00"), am/pm notation, and splits overnight ranges.
  * Uses sequential time extraction: if a range delimiter is found between times, treats as range;
- * otherwise treats each time as a single-hour slot. Overnight ranges (start >= end) are split
+ * otherwise treats each time as a 30-minute slot. Overnight ranges (start >= end) are split
  * into two ranges at midnight, unless end is exactly midnight (00:00).
  * @param {string} allTimes - Time availability string, e.g., "00:00-12:00,19-2" or "19 to 22".
  * @returns {Array<TimeRange>} Array of time range objects.
@@ -247,15 +277,17 @@ function parseTimeRanges(allTimes) {
             }
         }
 
-        // Single hour mode: treat as hour-long slot starting at this time
-        const hour = parseInt(startTime.split(':')[0], 10);
-        const endHour = (hour + 1) % 24;
-        const endTime = `${endHour.toString().padStart(2, '0')}:00`;
+        // Single time mode: treat as 30-minute slot starting at this time
+        const startMinutes = timeToMinutes(startTime);
+        const endMinutes = startMinutes + 30;
+        const endHour = Math.floor(endMinutes / 60) % 24;
+        const endMin = endMinutes % 60;
+        const endTime = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`;
         addRangeIfValid(ranges, startTime, endTime);
         i++;
     }
 
-    return ranges;
+    return mergeAdjacentRanges(ranges);
 }
 
 /**
@@ -433,7 +465,7 @@ function parseCsvToObjects(csvText) {
             if (hasTimeSlots && hasAllTimes) {
                 const timeSlotRanges = parseTimeRanges(`${start}-${end}`);
                 const allTimesRanges = parseTimeRanges(allTimes);
-                player.availableTimeRanges = unionTimeRanges(timeSlotRanges.concat(allTimesRanges));
+                player.availableTimeRanges = mergeAdjacentRanges(unionTimeRanges(timeSlotRanges.concat(allTimesRanges)));
             } else if (hasTimeSlots) {
                 player.availableTimeRanges = parseTimeRanges(`${start}-${end}`);
             } else {
