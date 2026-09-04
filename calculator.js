@@ -65,6 +65,7 @@ const DEBUG = true;
  * @property {number} lastModifiedTimeMS - Last modification timestamp in epoch milliseconds.
  * @property {number} constructionKingDay - The day construction speedups are king-prioritized (default 1).
  * @property {number} researchKingDay - The day research speedups are king-prioritized (default 2).
+ * @property {boolean} generateDay5Assignment - Whether to generate Day 5 spillover assignments (default true).
  * @property {Array<string>} errors - Array of error messages for user display.
  */
 
@@ -87,6 +88,7 @@ const schedulerData = {
     lastModifiedTimeMS: 0,
     constructionKingDay: 1,
     researchKingDay: 2,
+    generateDay5Assignment: true,
     currentDay: 0
 };
 
@@ -480,7 +482,10 @@ function scheduleSpilloverDay(schedulerData, spilloverDay, players = null) {
 
         for (const slot of slots) {
             if (!taken.has(slot.start) && isSlotAvailable(player, slot.start, slot.end)) {
-                if (!(schedulerData.constructionAssignments[playerId] && schedulerData.researchAssignments[playerId])) {
+                const skipPlayer = spilloverDay === 5
+                    ? (schedulerData.constructionAssignments[playerId] || schedulerData.researchAssignments[playerId])
+                    : (schedulerData.constructionAssignments[playerId] && schedulerData.researchAssignments[playerId]);
+                if (!skipPlayer) {
                     // Exact push and flag update as original
                     schedulerData.assignments[spilloverDay].ministers.push({
                          start: slot.start,
@@ -1093,6 +1098,7 @@ function calculateScheduleData(players, errors = [], isRecalculate = false) {
     schedulerData.minHours = minHours;
     schedulerData.constructionKingDay = constructDay;
     schedulerData.researchKingDay = researchDay;
+    schedulerData.generateDay5Assignment = document.getElementById('generateDay5Assignment').checked;
     if (!isRecalculate) {
         schedulerData.rawPlayers = JSON.parse(JSON.stringify(players));
     }
@@ -1142,7 +1148,7 @@ function calculateScheduleData(players, errors = [], isRecalculate = false) {
         { day: constructDay, shouldRun: constructDay > schedulerData.currentDay, fn: () => assignInitialMinisters(constructDay, constructionList, CONSTRUCTION, 'constructionAssignments', schedulerData) },
         { day: researchDay, shouldRun: researchDay > schedulerData.currentDay, fn: () => assignInitialMinisters(researchDay, researchList, RESEARCH, 'researchAssignments', schedulerData) },
         { day: 4, shouldRun: 4 > schedulerData.currentDay, fn: () => scheduleTrainingDay(trainingList, minHours, schedulerData) },
-        { day: spilloverDay, shouldRun: spilloverDay > schedulerData.currentDay, fn: () => scheduleSpilloverDay(schedulerData, spilloverDay) }
+        { day: spilloverDay, shouldRun: spilloverDay > schedulerData.currentDay && (spilloverDay !== 5 || schedulerData.generateDay5Assignment), fn: () => scheduleSpilloverDay(schedulerData, spilloverDay) }
     ];
 
     tasks.forEach(task => {
@@ -1226,7 +1232,9 @@ function validateAndAssignUnassignedPlayers(schedulerData, minHours, spilloverDa
     });
 
     // Schedule collected unassigned players via spillover
-    scheduleSpilloverDay(schedulerData, spilloverDay, unassignedForSpillover);
+    if (spilloverDay !== 5 || schedulerData.generateDay5Assignment) {
+        scheduleSpilloverDay(schedulerData, spilloverDay, unassignedForSpillover);
+    }
 }
 
 /**
@@ -1331,6 +1339,14 @@ function renderUI(data, scrollToTop = false, errors = []) {
     updateFilteredList(data.filteredOut);
     document.querySelectorAll('.day-section').forEach(el => el.style.display = 'block');
 
+    // Hide Day 5 section if spillover generation is disabled and Day 5 is the spillover day
+    if (data.constructionKingDay !== 5 && data.researchKingDay !== 5 && !data.generateDay5Assignment) {
+        var day5Section = document.getElementById('day5Section');
+        if (day5Section) {
+            day5Section.style.display = 'none';
+        }
+    }
+
     // Populate daily waiting lists
     Object.entries(data.waitingLists).forEach(([day, players]) => {
         populateDailyWaitingList(parseInt(day), players);
@@ -1432,6 +1448,7 @@ function loadSchedulerSystem(data) {
     schedulerData.researchKingDay = schedulerData.researchKingDay ?? 2;
     schedulerData.currentDay = schedulerData.currentDay ?? 0;
     schedulerData.assignments[3] = schedulerData.assignments[3] ?? { ministers: [], advisors: [] };
+    schedulerData.generateDay5Assignment = schedulerData.generateDay5Assignment ?? true;
 
     // Update UI inputs
     const minHoursInput = document.getElementById('minHoursInput');
@@ -1445,6 +1462,10 @@ function loadSchedulerSystem(data) {
     const researchDayInput = document.getElementById('researchKingDay');
     if (researchDayInput) {
         researchDayInput.value = schedulerData.researchKingDay;
+    }
+    const generateDay5Input = document.getElementById('generateDay5Assignment');
+    if (generateDay5Input) {
+        generateDay5Input.checked = schedulerData.generateDay5Assignment;
     }
 
     // Render the UI

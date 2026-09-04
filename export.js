@@ -57,6 +57,12 @@ function exportToHtml() {
 
     var clone = appointmentsContent.cloneNode(true);
 
+    // Remove Day 5 section if spillover generation was disabled and Day 5 is the spillover day
+    var day5Section = clone.querySelector('#day5Section');
+    if (day5Section && schedulerData.constructionKingDay !== 5 && schedulerData.researchKingDay !== 5 && !schedulerData.generateDay5Assignment) {
+        day5Section.remove();
+    }
+
     var dayContents = clone.querySelectorAll('.day-content');
     dayContents.forEach(function(el) {
         el.style.display = '';
@@ -75,7 +81,7 @@ function exportToHtml() {
 
     var toggleButtons = clone.querySelectorAll('button[id^="toggleDay"]');
     toggleButtons.forEach(function(btn) {
-        btn.style.display = 'none';
+        btn.textContent = 'Collapse';
     });
 
     // Keep only Appointment Time and Alliance/Player columns
@@ -291,6 +297,17 @@ function exportToHtml() {
         '    var block = btn.closest(".message-block");\n' +
         '    var text = block.getAttribute("data-text");\n' +
         '    navigator.clipboard.writeText(text).catch(function(e) { console.log("Copy failed: " + e); });\n' +
+        '}\n' +
+        'function toggleDay(contentId) {\n' +
+        '    var content = document.getElementById(contentId);\n' +
+        '    var button = document.getElementById("toggle" + contentId.charAt(0).toUpperCase() + contentId.slice(1).replace("Content", ""));\n' +
+        '    if (content.style.display === "none") {\n' +
+        '        content.style.display = "";\n' +
+        '        button.textContent = "Collapse";\n' +
+        '    } else {\n' +
+        '        content.style.display = "none";\n' +
+        '        button.textContent = "Expand";\n' +
+        '    }\n' +
         '}\n' +
         '</script>\n';
 
