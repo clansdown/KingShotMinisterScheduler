@@ -11,6 +11,14 @@ def generate_true_gold():
     val = random.gauss(600, 200)
     return max(0, min(2000, int(round(val))))
 
+def generate_tempered_true_gold():
+    val = random.gauss(5, 5)
+    return max(0, min(60, int(round(val))))
+
+def generate_true_gold_dust():
+    val = random.gauss(200, 120)
+    return max(0, min(2000, int(round(val))))
+
 def generate_name(is_warrior):
     if is_warrior:
         prefixes = ["Thunder", "Blood", "Iron", "Storm", "Shadow", "Frost", "Fire", "Dragon", "Steel", "Night"]
@@ -68,11 +76,13 @@ def main():
         research_speedup = gaussian_clamp()
         used_for = generate_used_for()
         true_gold = generate_true_gold()
+        tempered_true_gold = generate_tempered_true_gold()
+        true_gold_dust = generate_true_gold_dust()
         start_time = generate_time()
         end_time = generate_time()
         all_times = generate_all_times()
         
-        writer.writerow([alliance, name, general_speedup, used_for, soldier_speedup, construction_speedup, research_speedup, true_gold, start_time, end_time, all_times])
+        writer.writerow([alliance, name, general_speedup, used_for, soldier_speedup, construction_speedup, research_speedup, true_gold, tempered_true_gold, true_gold_dust, start_time, end_time, all_times])
 
 if __name__ == "__main__":
     main()

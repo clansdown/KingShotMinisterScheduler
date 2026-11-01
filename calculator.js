@@ -1,6 +1,28 @@
 // Debug flag - set to false to disable debug output
 const DEBUG = true;
 
+// Buff points awarded per unit of each resource (CSV speedup columns are in days).
+const BUFF_POINTS_PER_SPEEDUP_DAY = 43200;
+const TRUEGOLD_PIECE_POINTS = 2000;
+const TEMPERED_TRUEGOLD_POINTS = 30000;
+const TRUEGOLD_DUST_POINTS = 1000;
+
+// CSV column header template copied by the "Copy CSV Header" button (Time Slot Start/End UTC are historical-only and omitted).
+/** @type {Array<string>} */
+const CSV_HEADER_TEMPLATE = [
+    'Player',
+    'Alliance',
+    'General Speedups',
+    'General Used For',
+    'Soldier Training',
+    'Construction',
+    'TrueGold Pieces',
+    'Tempered TrueGold',
+    'Research',
+    'TrueGold Dust',
+    'All Times'
+];
+
 /**
  * @typedef {Object} PlayerObject
  * @property {string} player - Player's name.
@@ -11,6 +33,8 @@ const DEBUG = true;
  * @property {number} construction - Base construction speedups (converted to number).
  * @property {number} research - Base research speedups (converted to number).
  * @property {number} truegoldPieces - Number of TrueGold pieces (converted to number).
+ * @property {number} temperedTrueGold - Number of Tempered TrueGold items (converted to number, default 0).
+ * @property {number} trueGoldDust - Number of TrueGold Dust items (converted to number, default 0).
  * @property {string} timeSlotStartUtc - Overall start time in HH:MM.
  * @property {string} timeSlotEndUtc - Overall end time in HH:MM.
  * @property {string} [allTimes] - Available time ranges string.
@@ -31,6 +55,8 @@ const DEBUG = true;
  * @property {string} player - Player's name.
  * @property {string|number} speedups - Speedup info (string for ministers, number for advisors).
  * @property {number} truegold - TrueGold pieces.
+ * @property {number} temperedTrueGold - Tempered TrueGold count.
+ * @property {number} trueGoldDust - TrueGold Dust count.
  */
 
 /**
@@ -49,6 +75,8 @@ const DEBUG = true;
  * @property {string} player - Player's name.
  * @property {{soldier: number, construction: number, research: number}} speedups - Post-distribution speedups.
  * @property {number} truegold - TrueGold pieces.
+ * @property {number} temperedTrueGold - Tempered TrueGold count.
+ * @property {number} trueGoldDust - TrueGold Dust count.
  * @property {string} timeSlots - Comma-separated time ranges or 'No available ranges'.
  */
 
@@ -59,12 +87,13 @@ const DEBUG = true;
  * @property {Assignments} assignments - The generated schedule assignments.
  * @property {Object<string, {ministerAssigned: boolean, advisorAssigned: boolean}>} playerAssignments - Tracking of assigned players.
  * @property {Object<number, Array<WaitingPlayer>>} waitingLists - Waiting list per day (keys: 1, 2, 4, 5).
- * @property {Array<PlayerObject>} filteredOut - List of players filtered out due to insufficient hours.
- * @property {number} minHours - The minimum hours threshold used for processing.
+ * @property {Array<PlayerObject>} filteredOut - List of players filtered out due to insufficient speedup days.
+ * @property {number} minDays - The minimum speedup days threshold used for processing.
  * @property {number} creationTimeMS - Creation timestamp in epoch milliseconds.
  * @property {number} lastModifiedTimeMS - Last modification timestamp in epoch milliseconds.
  * @property {number} constructionKingDay - The day construction speedups are king-prioritized (default 1).
  * @property {number} researchKingDay - The day research speedups are king-prioritized (default 2).
+ * @property {boolean} generateDay4Ministers - Whether to generate Day 4 Chief Minister spillover appointments (default true).
  * @property {boolean} generateDay5Assignment - Whether to generate Day 5 spillover assignments (default true).
  * @property {Array<string>} errors - Array of error messages for user display.
  */
@@ -83,11 +112,12 @@ const schedulerData = {
     constructionAssignments: {},
     researchAssignments: {},
     trainingAssignments: {},
-    minHours: 10,
+    minDays: 10,
     creationTimeMS: 0,
     lastModifiedTimeMS: 0,
     constructionKingDay: 1,
     researchKingDay: 2,
+    generateDay4Ministers: true,
     generateDay5Assignment: true,
     currentDay: 0
 };
@@ -304,8 +334,8 @@ function assignInitialMinisters(day, players, speedupProp, assignmentFlag, sched
 
     // Round 2: Displacement
     const evaluator = speedupProp === CONSTRUCTION
-        ? (p) => (p[CONSTRUCTION] * 43200) + (p[TRUEGOLD_PIECES] * 2000)
-        : (p) => p[speedupProp];
+        ? (p) => (p[CONSTRUCTION] * BUFF_POINTS_PER_SPEEDUP_DAY) + (p[TRUEGOLD_PIECES] * TRUEGOLD_PIECE_POINTS) + ((p[TEMPERED_TRUEGOLD] || 0) * TEMPERED_TRUEGOLD_POINTS)
+        : (p) => (p[speedupProp] * BUFF_POINTS_PER_SPEEDUP_DAY) + ((p[TRUEGOLD_DUST] || 0) * TRUEGOLD_DUST_POINTS);
     performDisplacement(unscheduled, assignedPlayerSlots, evaluator);
 
     // Finalize Assignments
@@ -319,6 +349,8 @@ function assignInitialMinisters(day, players, speedupProp, assignmentFlag, sched
             player: player[PLAYER],
             speedups: `${Math.round(player[speedupProp])}`,
             truegold: player[TRUEGOLD_PIECES],
+            temperedTrueGold: player[TEMPERED_TRUEGOLD] || 0,
+            trueGoldDust: player[TRUEGOLD_DUST] || 0,
             rawSpeedup: player[speedupProp] 
         };
         schedulerData.assignments[day].ministers.push(appointment);
@@ -337,22 +369,24 @@ function assignInitialMinisters(day, players, speedupProp, assignmentFlag, sched
             research: Math.round(player[RESEARCH])
         },
         truegold: Math.round(player[TRUEGOLD_PIECES]),
+        temperedTrueGold: Math.round(player[TEMPERED_TRUEGOLD]) || 0,
+        trueGoldDust: Math.round(player[TRUEGOLD_DUST]) || 0,
         timeSlots: player.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ') || 'No available ranges'
     })));
 }
 
 /**
  * Schedules the training day (Day 4) fulfilling soldier training quotas.
- * Prioritizes Noble Advisors, overflows to Chief Ministers.
+ * Prioritizes Noble Advisors, overflows to Chief Ministers unless generateDay4Ministers is disabled,
+ * in which case unassigned training-qualified players go straight to the waiting list.
  * Each stage uses two rounds: shortest time slots first, then displacement.
- * @param {Array<PlayerObject>} players - Array of eligible players (soldier training >= minHours).
- * @param {number} minHours - Minimum hours.
+ * @param {Array<PlayerObject>} players - Array of eligible players (soldier training >= minDays).
+ * @param {number} minDays - Minimum speedup days.
  * @param {SchedulerData} schedulerData - Main data object.
  */
-function scheduleTrainingDay(players, minHours, schedulerData) {
+function scheduleTrainingDay(players, minDays, schedulerData) {
     const day = 4;
     const advisorSlots = generateTimeSlots();
-    const ministerSlots = generateTimeSlots(); // Independent slots for overflow
     
     // --- STAGE 1: Noble Advisors ---
     
@@ -368,7 +402,7 @@ function scheduleTrainingDay(players, minHours, schedulerData) {
     // Finalize Advisor Assignments
     const takenAdvisor = new Set(schedulerData.assignments[day].advisors.map(a => a.start));
     assignedAdvisorSlots.forEach(({ player, slot }) => {
-        // console.log(`Assigning Noble Advisor: ${player[PLAYER]} (${player[ALLIANCE]}) to ${slot.start}-${slot.end} with ${player[SOLDIER_TRAINING]} hours`);
+        // console.log(`Assigning Noble Advisor: ${player[PLAYER]} (${player[ALLIANCE]}) to ${slot.start}-${slot.end} with ${player[SOLDIER_TRAINING]} days`);
         const appointment = {
             start: slot.start,
             end: slot.end,
@@ -376,6 +410,8 @@ function scheduleTrainingDay(players, minHours, schedulerData) {
             player: player[PLAYER],
             speedups: Math.round(player[SOLDIER_TRAINING]),
             truegold: player[TRUEGOLD_PIECES],
+            temperedTrueGold: player[TEMPERED_TRUEGOLD] || 0,
+            trueGoldDust: player[TRUEGOLD_DUST] || 0,
             rawSpeedup: player[SOLDIER_TRAINING]
         };
         schedulerData.assignments[day].advisors.push(appointment);
@@ -385,37 +421,44 @@ function scheduleTrainingDay(players, minHours, schedulerData) {
     });
 
     // --- STAGE 2: Chief Minister Overflow ---
-    // Candidates: Players qualified for advisor (training >= minHours) but NOT assigned as advisor
-    
+    // Candidates: Players qualified for advisor (training >= minDays) but NOT assigned as advisor.
+    // When generateDay4Ministers is disabled, skip the spillover entirely; candidates are added to the waiting list below.
+
     let overflowCandidates = players.filter(p => !schedulerData.trainingAssignments[`${p[PLAYER]}-${p[ALLIANCE]}`]);
-    const assignedMinisterSlots = [];
 
-    // Round 1: Greedy Assignment for Overflow
-    assignFirstPass(overflowCandidates, ministerSlots, assignedMinisterSlots);
+    if (schedulerData.generateDay4Ministers) {
+        const ministerSlots = generateTimeSlots(); // Independent slots for overflow
+        const assignedMinisterSlots = [];
 
-    // Round 2: Minister Overflow Displacement (Displace if Training > C+R)
-    performDisplacement(overflowCandidates, assignedMinisterSlots, (p) => p[SOLDIER_TRAINING]);
+        // Round 1: Greedy Assignment for Overflow
+        assignFirstPass(overflowCandidates, ministerSlots, assignedMinisterSlots);
 
-    // Finalize Minister Overflow Assignments
-    const takenMinister = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
-    assignedMinisterSlots.forEach(({ player, slot }) => {
-        const app = {
-            start: slot.start,
-            end: slot.end,
-            alliance: player[ALLIANCE],
-            player: player[PLAYER],
-            speedups: `${Math.round(player[CONSTRUCTION])} / ${Math.round(player[RESEARCH])}`,
-            truegold: player[TRUEGOLD_PIECES],
-            rawSpeedupSum: player[CONSTRUCTION] + player[RESEARCH]
-        };
-        schedulerData.assignments[day].ministers.push(app);
-        const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
-        schedulerData.researchAssignments[playerId] = true;
-        takenMinister.add(slot.start);
-    });
+        // Round 2: Minister Overflow Displacement (Displace if Training > C+R)
+        performDisplacement(overflowCandidates, assignedMinisterSlots, (p) => p[SOLDIER_TRAINING]);
+
+        // Finalize Minister Overflow Assignments
+        const takenMinister = new Set(schedulerData.assignments[day].ministers.map(a => a.start));
+        assignedMinisterSlots.forEach(({ player, slot }) => {
+            const app = {
+                start: slot.start,
+                end: slot.end,
+                alliance: player[ALLIANCE],
+                player: player[PLAYER],
+                speedups: `${Math.round(player[CONSTRUCTION])} / ${Math.round(player[RESEARCH])}`,
+                truegold: player[TRUEGOLD_PIECES],
+                temperedTrueGold: player[TEMPERED_TRUEGOLD] || 0,
+                trueGoldDust: player[TRUEGOLD_DUST] || 0,
+                rawSpeedupSum: player[CONSTRUCTION] + player[RESEARCH]
+            };
+            schedulerData.assignments[day].ministers.push(app);
+            const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
+            schedulerData.researchAssignments[playerId] = true;
+            takenMinister.add(slot.start);
+        });
+    }
 
     // Add remaining unassigned to day 4's waiting list
-    // overflowCandidates contains those not assigned in Stage 2.
+    // overflowCandidates contains those not assigned in Stage 2 (or all candidates when spillover is disabled).
     schedulerData.waitingLists[day].push(...overflowCandidates.map(player => ({
         alliance: player[ALLIANCE],
         player: player[PLAYER],
@@ -425,6 +468,8 @@ function scheduleTrainingDay(players, minHours, schedulerData) {
             research: Math.round(player[RESEARCH])
         },
         truegold: Math.round(player[TRUEGOLD_PIECES]),
+        temperedTrueGold: Math.round(player[TEMPERED_TRUEGOLD]) || 0,
+        trueGoldDust: Math.round(player[TRUEGOLD_DUST]) || 0,
         timeSlots: player.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ') || 'No available ranges'
     })));
 }
@@ -435,7 +480,7 @@ function scheduleTrainingDay(players, minHours, schedulerData) {
  * Adds unscheduled players to the spillover waiting list in all cases.
  * @param {SchedulerData} schedulerData - Main data object.
  * @param {number} spilloverDay - The day number to assign spillover players to.
- * @param {Array<WaitingPlayer>} [players=null] - Optional array of WaitingPlayer objects to schedule. Must include properties: alliance, player, speedups (object with soldier/construction/research), truegold, timeSlots.
+ * @param {Array<WaitingPlayer>} [players=null] - Optional array of WaitingPlayer objects to schedule. Must include properties: alliance, player, speedups (object with soldier/construction/research), truegold, temperedTrueGold, trueGoldDust, timeSlots.
  */
 /** @typedef {WaitingPlayer & {originalDay?: number}} SpilloverCandidate */
 function scheduleSpilloverDay(schedulerData, spilloverDay, players = null) {
@@ -493,7 +538,9 @@ function scheduleSpilloverDay(schedulerData, spilloverDay, players = null) {
                          alliance: candidate.alliance,
                          player: candidate.player,
                          speedups: `${Math.round(candidate.speedups.construction)} / ${Math.round(candidate.speedups.research)} / ${Math.round(candidate.speedups.soldier)}`,
-                         truegold: candidate.truegold
+                         truegold: candidate.truegold,
+                         temperedTrueGold: candidate.temperedTrueGold || 0,
+                         trueGoldDust: candidate.trueGoldDust || 0
                      });
                     if (!schedulerData.constructionAssignments[playerId]) schedulerData.constructionAssignments[playerId] = true;
                     if (!schedulerData.researchAssignments[playerId]) schedulerData.researchAssignments[playerId] = true;
@@ -516,6 +563,8 @@ function scheduleSpilloverDay(schedulerData, spilloverDay, players = null) {
             player: candidate.player,
             speedups: { soldier: candidate.speedups.soldier, construction: candidate.speedups.construction, research: candidate.speedups.research },
             truegold: candidate.truegold,
+            temperedTrueGold: candidate.temperedTrueGold || 0,
+            trueGoldDust: candidate.trueGoldDust || 0,
             timeSlots: candidate.timeSlots
         }));
         schedulerData.waitingLists[spilloverDay].push(...toAdd);
@@ -809,10 +858,12 @@ function populateTable(tableId, appointments) {
             row.insertCell(2).textContent = appointment.speedups;
             if (!isNoble) {
                 row.insertCell(3).textContent = appointment.truegold;
+                row.insertCell(4).textContent = appointment.temperedTrueGold || 0;
+                row.insertCell(5).textContent = appointment.trueGoldDust || 0;
             }
 
             // Actions Column with Reassign/Remove buttons
-            const actionsCell = row.insertCell(isNoble ? 3 : 4);
+            const actionsCell = row.insertCell(isNoble ? 3 : 6);
 
             const reassignBtn = document.createElement('button');
             reassignBtn.className = 'btn btn-sm btn-outline-primary me-1';
@@ -837,10 +888,12 @@ function populateTable(tableId, appointments) {
             row.insertCell(2).textContent = '';
             if (!isNoble) {
                 row.insertCell(3).textContent = '';
+                row.insertCell(4).textContent = '';
+                row.insertCell(5).textContent = '';
             }
 
             // Actions Column with Assign button
-            const actionsCell = row.insertCell(isNoble ? 3 : 4);
+            const actionsCell = row.insertCell(isNoble ? 3 : 6);
 
             const assignBtn = document.createElement('button');
             assignBtn.className = 'btn btn-sm btn-outline-success';
@@ -850,12 +903,27 @@ function populateTable(tableId, appointments) {
         }
     });
 
-    // Update header to add "Actions" column if not already there
+    // Update header to add Tempered TrueGold, TrueGold Dust, and "Actions" columns if not already present
     const thead = document.querySelector(`#${tableId} thead tr`);
-    if (thead && !thead.lastElementChild.textContent.includes('Actions')) {
-        const th = document.createElement('th');
-        th.textContent = 'Actions';
-        thead.appendChild(th);
+    if (thead) {
+        const existingHeaderTexts = Array.from(thead.querySelectorAll('th')).map(th => th.textContent.trim());
+        if (!isNoble) {
+            if (!existingHeaderTexts.includes('Tempered TrueGold')) {
+                const thTemp = document.createElement('th');
+                thTemp.textContent = 'Tempered TrueGold';
+                thead.appendChild(thTemp);
+            }
+            if (!existingHeaderTexts.includes('TrueGold Dust')) {
+                const thDust = document.createElement('th');
+                thDust.textContent = 'TrueGold Dust';
+                thead.appendChild(thDust);
+            }
+        }
+        if (!Array.from(thead.querySelectorAll('th')).some(th => th.textContent.includes('Actions'))) {
+            const th = document.createElement('th');
+            th.textContent = 'Actions';
+            thead.appendChild(th);
+        }
     }
 }
 
@@ -989,7 +1057,9 @@ function populateDebugTable(players) {
                     <th>General Used For</th>
                     <th>Training</th>
                     <th>Construction</th>
+                    <th>Tempered TG</th>
                     <th>Research</th>
+                    <th>TG Dust</th>
                     <th>TrueGold</th>
                     <th>Time Slots</th>
                     <th></th>
@@ -1025,13 +1095,15 @@ function populateDebugTable(players) {
         row.insertCell(2).textContent = player[GENERAL_USED_FOR];
         row.insertCell(3).textContent = Math.round(player[SOLDIER_TRAINING]);
         row.insertCell(4).textContent = Math.round(player[CONSTRUCTION]);
-        row.insertCell(5).textContent = Math.round(player[RESEARCH]);
-        row.insertCell(6).textContent = Math.round(player[TRUEGOLD_PIECES]);
+        row.insertCell(5).textContent = Math.round(player[TEMPERED_TRUEGOLD]) || 0;
+        row.insertCell(6).textContent = Math.round(player[RESEARCH]);
+        row.insertCell(7).textContent = Math.round(player[TRUEGOLD_DUST]) || 0;
+        row.insertCell(8).textContent = Math.round(player[TRUEGOLD_PIECES]);
         const timeSlots = player.availableTimeRanges.length > 0
             ? player.availableTimeRanges.map(range => `${range.start}-${range.end}`).join(', ')
             : 'No available ranges';
-        row.insertCell(7).textContent = timeSlots;
-        const scheduleCell = row.insertCell(8);
+        row.insertCell(9).textContent = timeSlots;
+        const scheduleCell = row.insertCell(10);
         const scheduleBtn = document.createElement('button');
         scheduleBtn.className = 'btn btn-sm btn-outline-primary';
         scheduleBtn.textContent = 'Schedule';
@@ -1087,7 +1159,7 @@ function populateDebugTable(players) {
  * @param {boolean} [isRecalculate=false] - If true, preserves rawPlayers and creationTimeMS (for recalculate).
  */
 function calculateScheduleData(players, errors = [], isRecalculate = false) {
-    const minHours = parseInt(document.getElementById('minHoursInput').value) || 10;
+    const minDays = parseInt(document.getElementById('minDaysInput').value) || 10;
     const constructDay = parseInt(document.getElementById('constructionKingDay').value) || 1;
     const researchDay = parseInt(document.getElementById('researchKingDay').value) || 2;
     const now = Date.now();
@@ -1095,9 +1167,10 @@ function calculateScheduleData(players, errors = [], isRecalculate = false) {
         schedulerData.creationTimeMS = now;
     }
     schedulerData.lastModifiedTimeMS = now;
-    schedulerData.minHours = minHours;
+    schedulerData.minDays = minDays;
     schedulerData.constructionKingDay = constructDay;
     schedulerData.researchKingDay = researchDay;
+    schedulerData.generateDay4Ministers = document.getElementById('generateDay4Ministers').checked;
     schedulerData.generateDay5Assignment = document.getElementById('generateDay5Assignment').checked;
     if (!isRecalculate) {
         schedulerData.rawPlayers = JSON.parse(JSON.stringify(players));
@@ -1109,8 +1182,8 @@ function calculateScheduleData(players, errors = [], isRecalculate = false) {
     // Allocate general speedups
     schedulerData.processedPlayers.forEach(allocateGeneralSpeedups);
 
-    // Filter players based on minimum hours
-    const filtered = schedulerData.processedPlayers.filter(player => (player[CONSTRUCTION] + player[RESEARCH] >= minHours) || (player[SOLDIER_TRAINING] >= minHours));
+    // Filter players based on minimum days
+    const filtered = schedulerData.processedPlayers.filter(player => (player[CONSTRUCTION] + player[RESEARCH] >= minDays) || (player[SOLDIER_TRAINING] >= minDays));
     schedulerData.filteredOut = schedulerData.processedPlayers.filter(player => !filtered.includes(player));
 
     // Initialize assignments and tracking
@@ -1120,11 +1193,11 @@ function calculateScheduleData(players, errors = [], isRecalculate = false) {
     schedulerData.trainingAssignments = {};
     filtered.forEach(player => {
         const playerId = `${player[PLAYER]}-${player[ALLIANCE]}`;
-        if (player[CONSTRUCTION] + player[RESEARCH] >= minHours) {
+        if (player[CONSTRUCTION] + player[RESEARCH] >= minDays) {
             schedulerData.constructionAssignments[playerId] = false;
             schedulerData.researchAssignments[playerId] = false;
         }
-        if (player[SOLDIER_TRAINING] >= minHours) {
+        if (player[SOLDIER_TRAINING] >= minDays) {
             schedulerData.trainingAssignments[playerId] = false;
         }
     });
@@ -1135,19 +1208,19 @@ function calculateScheduleData(players, errors = [], isRecalculate = false) {
     const spilloverDay = [1, 2, 5].find(d => d !== constructDay && d !== researchDay);
 
     // Construction buff assignment (Initial Two-Round)
-    const constructionList = filtered.filter(player => player[CONSTRUCTION] >= minHours);
+    const constructionList = filtered.filter(player => player[CONSTRUCTION] >= minDays);
 
     // Research buff assignment (Initial Two-Round)
-    const researchList = filtered.filter(player => player[RESEARCH] >= minHours);
+    const researchList = filtered.filter(player => player[RESEARCH] >= minDays);
 
     // Advisor assignment for Day 4 (Two Stages, Two Rounds each)
-    const trainingList = filtered.filter(player => player[SOLDIER_TRAINING] >= minHours);
+    const trainingList = filtered.filter(player => player[SOLDIER_TRAINING] >= minDays);
 
     // Only process days > currentDay
     const tasks = [
         { day: constructDay, shouldRun: constructDay > schedulerData.currentDay, fn: () => assignInitialMinisters(constructDay, constructionList, CONSTRUCTION, 'constructionAssignments', schedulerData) },
         { day: researchDay, shouldRun: researchDay > schedulerData.currentDay, fn: () => assignInitialMinisters(researchDay, researchList, RESEARCH, 'researchAssignments', schedulerData) },
-        { day: 4, shouldRun: 4 > schedulerData.currentDay, fn: () => scheduleTrainingDay(trainingList, minHours, schedulerData) },
+        { day: 4, shouldRun: 4 > schedulerData.currentDay, fn: () => scheduleTrainingDay(trainingList, minDays, schedulerData) },
         { day: spilloverDay, shouldRun: spilloverDay > schedulerData.currentDay && (spilloverDay !== 5 || schedulerData.generateDay5Assignment), fn: () => scheduleSpilloverDay(schedulerData, spilloverDay) }
     ];
 
@@ -1157,17 +1230,17 @@ function calculateScheduleData(players, errors = [], isRecalculate = false) {
         }
     });
 
-    validateAndAssignUnassignedPlayers(schedulerData, minHours, spilloverDay);
+    validateAndAssignUnassignedPlayers(schedulerData, minDays, spilloverDay);
 }
 
 /**
  * Validates that all processed players are either assigned, on a waiting list, or filtered out.
  * Adds qualifying unassigned players to appropriate waiting lists and schedules leftover unassigned players via spillover day.
  * @param {SchedulerData} schedulerData - Main data object.
- * @param {number} minHours - Minimum hours threshold.
+ * @param {number} minDays - Minimum speedup days threshold.
  * @param {number} spilloverDay - The spillover day to add players to for general access.
  */
-function validateAndAssignUnassignedPlayers(schedulerData, minHours, spilloverDay) {
+function validateAndAssignUnassignedPlayers(schedulerData, minDays, spilloverDay) {
     /** @type {Array<WaitingPlayer>} */
     const unassignedForSpillover = [];
     const allAppointments = Object.values(schedulerData.assignments).flatMap(day => day.ministers.concat(day.advisors));
@@ -1195,7 +1268,7 @@ function validateAndAssignUnassignedPlayers(schedulerData, minHours, spilloverDa
         const totalSpeedups = getAllSpeedupsSum(player);
         addError(`Unassigned player [${alliance}]${playerName} (total speedups: ${totalSpeedups}) not found in assignments, waiting lists, or filtered out. This indicates a data integrity issue.`);
 
-        if (totalSpeedups >= minHours) {
+        if (totalSpeedups >= minDays) {
             const waitingPlayer = {
                 alliance: alliance,
                 player: playerName,
@@ -1205,6 +1278,8 @@ function validateAndAssignUnassignedPlayers(schedulerData, minHours, spilloverDa
                     research: Math.round(player[RESEARCH])
                 },
                 truegold: Math.round(player[TRUEGOLD_PIECES]),
+                temperedTrueGold: Math.round(player[TEMPERED_TRUEGOLD]) || 0,
+                trueGoldDust: Math.round(player[TRUEGOLD_DUST]) || 0,
                 timeSlots: player.availableTimeRanges.length > 0
                     ? player.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ')
                     : 'No available ranges'
@@ -1212,15 +1287,15 @@ function validateAndAssignUnassignedPlayers(schedulerData, minHours, spilloverDa
 
             let addedToOtherDay = false;
             // Add to waiting lists for which the player qualifies
-            if (player[CONSTRUCTION] >= minHours) {
+            if (player[CONSTRUCTION] >= minDays) {
                 schedulerData.waitingLists[schedulerData.constructionKingDay].push({ ...waitingPlayer });
                 addedToOtherDay = true;
             }
-            if (player[RESEARCH] >= minHours) {
+            if (player[RESEARCH] >= minDays) {
                 schedulerData.waitingLists[schedulerData.researchKingDay].push({ ...waitingPlayer });
                 addedToOtherDay = true;
             }
-            if (player[SOLDIER_TRAINING] >= minHours) {
+            if (player[SOLDIER_TRAINING] >= minDays) {
                 schedulerData.waitingLists[4].push({ ...waitingPlayer });
                 addedToOtherDay = true;
             }
@@ -1347,6 +1422,13 @@ function renderUI(data, scrollToTop = false, errors = []) {
         }
     }
 
+    // Show/hide Day 4 Chief Minister section based on config and content
+    const day4MinisterSection = document.getElementById('day4MinisterSection');
+    if (day4MinisterSection) {
+        const day4MinisterAppointments = data.assignments && data.assignments[4] ? data.assignments[4].ministers : [];
+        day4MinisterSection.style.display = (data.generateDay4Ministers !== false && day4MinisterAppointments.length > 0) ? 'block' : 'none';
+    }
+
     // Populate daily waiting lists
     Object.entries(data.waitingLists).forEach(([day, players]) => {
         populateDailyWaitingList(parseInt(day), players);
@@ -1448,12 +1530,30 @@ function loadSchedulerSystem(data) {
     schedulerData.researchKingDay = schedulerData.researchKingDay ?? 2;
     schedulerData.currentDay = schedulerData.currentDay ?? 0;
     schedulerData.assignments[3] = schedulerData.assignments[3] ?? { ministers: [], advisors: [] };
+    schedulerData.generateDay4Ministers = schedulerData.generateDay4Ministers ?? true;
     schedulerData.generateDay5Assignment = schedulerData.generateDay5Assignment ?? true;
 
+    // Migrate legacy minHours field to minDays
+    if (schedulerData.minHours !== undefined) {
+        schedulerData.minDays = schedulerData.minHours;
+        delete schedulerData.minHours;
+    }
+    schedulerData.minDays = schedulerData.minDays ?? 10;
+
+    // Normalize new resource fields on players for legacy data
+    /** @type {Array<Array<PlayerObject>>} */
+    const playerLists = [schedulerData.rawPlayers, schedulerData.processedPlayers, schedulerData.filteredOut];
+    playerLists.forEach(playerList => {
+        (playerList || []).forEach(player => {
+            player[TEMPERED_TRUEGOLD] = player[TEMPERED_TRUEGOLD] || 0;
+            player[TRUEGOLD_DUST] = player[TRUEGOLD_DUST] || 0;
+        });
+    });
+
     // Update UI inputs
-    const minHoursInput = document.getElementById('minHoursInput');
-    if (minHoursInput) {
-        minHoursInput.value = data.minHours || 10;
+    const minDaysInput = document.getElementById('minDaysInput');
+    if (minDaysInput) {
+        minDaysInput.value = schedulerData.minDays || 10;
     }
     const constructionDayInput = document.getElementById('constructionKingDay');
     if (constructionDayInput) {
@@ -1462,6 +1562,10 @@ function loadSchedulerSystem(data) {
     const researchDayInput = document.getElementById('researchKingDay');
     if (researchDayInput) {
         researchDayInput.value = schedulerData.researchKingDay;
+    }
+    const generateDay4Input = document.getElementById('generateDay4Ministers');
+    if (generateDay4Input) {
+        generateDay4Input.checked = schedulerData.generateDay4Ministers;
     }
     const generateDay5Input = document.getElementById('generateDay5Assignment');
     if (generateDay5Input) {
@@ -1525,8 +1629,10 @@ function exportSchedulerData() {
  * @returns {boolean} True if valid.
  */
 function isValidSchedulerData(data) {
-    const requiredFields = ['rawPlayers', 'processedPlayers', 'assignments', 'minHours', 'creationTimeMS'];
-    return requiredFields.every(field => Object.prototype.hasOwnProperty.call(data, field));
+    if (!data || typeof data !== 'object') return false;
+    const requiredFields = ['rawPlayers', 'processedPlayers', 'assignments', 'creationTimeMS'];
+    const hasThreshold = Object.prototype.hasOwnProperty.call(data, 'minDays') || Object.prototype.hasOwnProperty.call(data, 'minHours');
+    return requiredFields.every(field => Object.prototype.hasOwnProperty.call(data, field)) && hasThreshold;
 }
 
 // Event Listeners for Import/Export
@@ -1568,6 +1674,17 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('copyPlayerFormBtn').addEventListener('click', function() {
         const formContent = document.getElementById('playerFormContent').textContent;
         copyToClipboard(formContent);
+    });
+
+    // Copy CSV header template to the clipboard (tab-separated so pasting into a spreadsheet gives one cell per column)
+    document.getElementById('copyCsvHeaderBtn').addEventListener('click', function() {
+        const csvHeaderButton = document.getElementById('copyCsvHeaderBtn');
+        const originalLabel = csvHeaderButton.textContent;
+        copyToClipboard(CSV_HEADER_TEMPLATE.join('\t'));
+        csvHeaderButton.textContent = 'Copied!';
+        setTimeout(function() {
+            csvHeaderButton.textContent = originalLabel;
+        }, 1500);
     });
 
     // Setup event listeners after DOM is loaded
@@ -1662,6 +1779,8 @@ function submitAddPlayer() {
         [CONSTRUCTION]: parseFloat(formData.get('construction').toString()) || 0,
         [RESEARCH]: parseFloat(formData.get('research').toString()) || 0,
         [TRUEGOLD_PIECES]: parseFloat(formData.get('truegoldPieces').toString()) || 0,
+        [TEMPERED_TRUEGOLD]: parseFloat(formData.get('temperedTrueGold').toString()) || 0,
+        [TRUEGOLD_DUST]: parseFloat(formData.get('trueGoldDust').toString()) || 0,
         [TIME_SLOT_START_UTC]: normalizeTime(formData.get('timeSlotStartUtc').toString()) || '00:00',
         [TIME_SLOT_END_UTC]: normalizeTime(formData.get('timeSlotEndUtc').toString()) || '23:59',
         [ALL_TIMES]: formData.get('allTimes')
@@ -1700,28 +1819,28 @@ function submitAddPlayer() {
     // Initialize assignment tracking
     // @ts-ignore
     const playerId = `${newPlayer[PLAYER]}-${newPlayer[ALLIANCE]}`;
-    const minHours = schedulerData.minHours;
+    const minDays = schedulerData.minDays;
 
     // @ts-ignore
-    if (newPlayer[CONSTRUCTION] + newPlayer[RESEARCH] >= minHours) {
+    if (newPlayer[CONSTRUCTION] + newPlayer[RESEARCH] >= minDays) {
         schedulerData.constructionAssignments[playerId] = false;
         schedulerData.researchAssignments[playerId] = false;
     }
     // @ts-ignore
-    if (newPlayer[SOLDIER_TRAINING] >= minHours) {
+    if (newPlayer[SOLDIER_TRAINING] >= minDays) {
         schedulerData.trainingAssignments[playerId] = false;
     }
 
     // 2. Filter Check
     // @ts-ignore
-    const isMinisterQualified = (newPlayer[CONSTRUCTION] + newPlayer[RESEARCH]) >= minHours;
+    const isMinisterQualified = (newPlayer[CONSTRUCTION] + newPlayer[RESEARCH]) >= minDays;
     // @ts-ignore
-    const isAdvisorQualified = newPlayer[SOLDIER_TRAINING] >= minHours;
+    const isAdvisorQualified = newPlayer[SOLDIER_TRAINING] >= minDays;
     
     if (!isMinisterQualified && !isAdvisorQualified) {
         // @ts-ignore
         schedulerData.filteredOut.push(newPlayer);
-        finishManagementAction("Player added but filtered out due to insufficient hours.");
+        finishManagementAction("Player added but filtered out due to insufficient speedup days.");
         return;
     }
 
@@ -1735,7 +1854,7 @@ function submitAddPlayer() {
     const slots = generateTimeSlots();
 
     // Attempt Construction buff
-    if (constructDay > schedulerData.currentDay && newPlayer[CONSTRUCTION] >= minHours && !schedulerData.constructionAssignments[playerId]) {
+    if (constructDay > schedulerData.currentDay && newPlayer[CONSTRUCTION] >= minDays && !schedulerData.constructionAssignments[playerId]) {
         const taken = new Set(schedulerData.assignments[constructDay].ministers.map(a => a.start));
         for (const slot of slots) {
             // @ts-ignore
@@ -1750,7 +1869,11 @@ function submitAddPlayer() {
                     // @ts-ignore
                     speedups: `${Math.round(newPlayer[CONSTRUCTION])}`,
                     // @ts-ignore
-                    truegold: newPlayer[TRUEGOLD_PIECES]
+                    truegold: newPlayer[TRUEGOLD_PIECES],
+                    // @ts-ignore
+                    temperedTrueGold: newPlayer[TEMPERED_TRUEGOLD] || 0,
+                    // @ts-ignore
+                    trueGoldDust: newPlayer[TRUEGOLD_DUST] || 0
                 });
                 schedulerData.constructionAssignments[playerId] = true;
                 assignmentsMade.push({ day: constructDay, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
@@ -1776,7 +1899,11 @@ function submitAddPlayer() {
                         // @ts-ignore
                         speedups: `${Math.round(newPlayer[CONSTRUCTION])}`,
                         // @ts-ignore
-                        truegold: newPlayer[TRUEGOLD_PIECES]
+                        truegold: newPlayer[TRUEGOLD_PIECES],
+                        // @ts-ignore
+                        temperedTrueGold: newPlayer[TEMPERED_TRUEGOLD] || 0,
+                        // @ts-ignore
+                        trueGoldDust: newPlayer[TRUEGOLD_DUST] || 0
                     });
                     schedulerData.constructionAssignments[playerId] = true;
                     assignmentsMade.push({ day: day, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
@@ -1788,7 +1915,7 @@ function submitAddPlayer() {
     }
 
     // Attempt Research buff
-    if (researchDay > schedulerData.currentDay && newPlayer[RESEARCH] >= minHours && !schedulerData.researchAssignments[playerId]) {
+    if (researchDay > schedulerData.currentDay && newPlayer[RESEARCH] >= minDays && !schedulerData.researchAssignments[playerId]) {
         const taken = new Set(schedulerData.assignments[researchDay].ministers.map(a => a.start));
         for (const slot of slots) {
             // @ts-ignore
@@ -1803,7 +1930,11 @@ function submitAddPlayer() {
                     // @ts-ignore
                     speedups: `${Math.round(newPlayer[RESEARCH])}`,
                     // @ts-ignore
-                    truegold: newPlayer[TRUEGOLD_PIECES]
+                    truegold: newPlayer[TRUEGOLD_PIECES],
+                    // @ts-ignore
+                    temperedTrueGold: newPlayer[TEMPERED_TRUEGOLD] || 0,
+                    // @ts-ignore
+                    trueGoldDust: newPlayer[TRUEGOLD_DUST] || 0
                 });
                 schedulerData.researchAssignments[playerId] = true;
                 assignmentsMade.push({ day: researchDay, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
@@ -1828,7 +1959,11 @@ function submitAddPlayer() {
                             // @ts-ignore
                             speedups: `${Math.round(newPlayer[RESEARCH])}`,
                             // @ts-ignore
-                            truegold: newPlayer[TRUEGOLD_PIECES]
+                            truegold: newPlayer[TRUEGOLD_PIECES],
+                            // @ts-ignore
+                            temperedTrueGold: newPlayer[TEMPERED_TRUEGOLD] || 0,
+                            // @ts-ignore
+                            trueGoldDust: newPlayer[TRUEGOLD_DUST] || 0
                         });
                         schedulerData.researchAssignments[playerId] = true;
                         assignmentsMade.push({ day: day, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
@@ -1841,7 +1976,7 @@ function submitAddPlayer() {
     }
 
     // Attempt Advisor (Day 4)
-    if (4 > schedulerData.currentDay && newPlayer[SOLDIER_TRAINING] >= minHours && !schedulerData.trainingAssignments[playerId]) {
+    if (4 > schedulerData.currentDay && newPlayer[SOLDIER_TRAINING] >= minDays && !schedulerData.trainingAssignments[playerId]) {
         const day = 4;
         const advisorSlots = generateTimeSlots();
         const ministerSlots = generateTimeSlots(); // For overflow
@@ -1863,7 +1998,11 @@ function submitAddPlayer() {
                     // @ts-ignore
                     speedups: Math.round(newPlayer[SOLDIER_TRAINING]),
                     // @ts-ignore
-                    truegold: newPlayer[TRUEGOLD_PIECES]
+                    truegold: newPlayer[TRUEGOLD_PIECES],
+                    // @ts-ignore
+                    temperedTrueGold: newPlayer[TEMPERED_TRUEGOLD] || 0,
+                    // @ts-ignore
+                    trueGoldDust: newPlayer[TRUEGOLD_DUST] || 0
                 });
                 schedulerData.trainingAssignments[playerId] = true;
                 assignmentsMade.push({ day: day, role: 'advisors', slotStr: `${slot.start}-${slot.end}` });
@@ -1872,8 +2011,8 @@ function submitAddPlayer() {
               }
         }
 
-        // Overflow to Chief Minister if needed and not already assigned to research
-        if (!assigned && !schedulerData.researchAssignments[playerId]) {
+        // Overflow to Chief Minister if enabled, needed, and not already assigned to research
+        if (!assigned && schedulerData.generateDay4Ministers && !schedulerData.researchAssignments[playerId]) {
               for (const slot of ministerSlots) {
                   // @ts-ignore
                   if (!takenMinister.has(slot.start) && isSlotAvailable(newPlayer, slot.start, slot.end)) {
@@ -1887,7 +2026,11 @@ function submitAddPlayer() {
                         // @ts-ignore
                         speedups: `${Math.round(newPlayer[CONSTRUCTION])} / ${Math.round(newPlayer[RESEARCH])}`,
                         // @ts-ignore
-                        truegold: newPlayer[TRUEGOLD_PIECES]
+                        truegold: newPlayer[TRUEGOLD_PIECES],
+                        // @ts-ignore
+                        temperedTrueGold: newPlayer[TEMPERED_TRUEGOLD] || 0,
+                        // @ts-ignore
+                        trueGoldDust: newPlayer[TRUEGOLD_DUST] || 0
                     });
                       schedulerData.researchAssignments[playerId] = true; // Sets research assignment only
                       assignmentsMade.push({ day: 4, role: 'ministers', slotStr: `${slot.start}-${slot.end}` });
@@ -1916,19 +2059,23 @@ function submitAddPlayer() {
             // @ts-ignore
             truegold: Math.round(newPlayer[TRUEGOLD_PIECES]),
             // @ts-ignore
+            temperedTrueGold: Math.round(newPlayer[TEMPERED_TRUEGOLD]) || 0,
+            // @ts-ignore
+            trueGoldDust: Math.round(newPlayer[TRUEGOLD_DUST]) || 0,
+            // @ts-ignore
             timeSlots: newPlayer.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ') || 'No available ranges'
         };
         // Add to all waiting lists for which the player qualifies
         // @ts-ignore
-        if (newPlayer[CONSTRUCTION] >= minHours) {
+        if (newPlayer[CONSTRUCTION] >= minDays) {
             schedulerData.waitingLists[schedulerData.constructionKingDay].push({ ...waitingPlayer });
         }
         // @ts-ignore
-        if (newPlayer[RESEARCH] >= minHours) {
+        if (newPlayer[RESEARCH] >= minDays) {
             schedulerData.waitingLists[schedulerData.researchKingDay].push({ ...waitingPlayer });
         }
         // @ts-ignore
-        if (newPlayer[SOLDIER_TRAINING] >= minHours) {
+        if (newPlayer[SOLDIER_TRAINING] >= minDays) {
             schedulerData.waitingLists[4].push({ ...waitingPlayer });
         }
         // Always add to spillover day waiting list
@@ -2014,6 +2161,8 @@ function openEditPlayerModal(alliance, player) {
     form.construction.value = rawPlayer[CONSTRUCTION];
     form.research.value = rawPlayer[RESEARCH];
     form.truegoldPieces.value = rawPlayer[TRUEGOLD_PIECES];
+    form.temperedTrueGold.value = rawPlayer[TEMPERED_TRUEGOLD] || 0;
+    form.trueGoldDust.value = rawPlayer[TRUEGOLD_DUST] || 0;
     form.timeSlotStartUtc.value = rawPlayer[TIME_SLOT_START_UTC] || '';
     form.timeSlotEndUtc.value = rawPlayer[TIME_SLOT_END_UTC] || '';
     form.allTimes.value = rawPlayer[ALL_TIMES] || '';
@@ -2054,6 +2203,8 @@ function submitEditPlayer() {
         [CONSTRUCTION]: parseFloat(formData.get('construction').toString()) || 0,
         [RESEARCH]: parseFloat(formData.get('research').toString()) || 0,
         [TRUEGOLD_PIECES]: parseFloat(formData.get('truegoldPieces').toString()) || 0,
+        [TEMPERED_TRUEGOLD]: parseFloat(formData.get('temperedTrueGold').toString()) || 0,
+        [TRUEGOLD_DUST]: parseFloat(formData.get('trueGoldDust').toString()) || 0,
         [TIME_SLOT_START_UTC]: normalizeTime(formData.get('timeSlotStartUtc').toString()) || '00:00',
         [TIME_SLOT_END_UTC]: normalizeTime(formData.get('timeSlotEndUtc').toString()) || '23:59',
         [ALL_TIMES]: formData.get('allTimes')
@@ -2226,10 +2377,10 @@ function populatePlayerSelect() {
     const qualifiedPlayers = schedulerData.processedPlayers.filter(p => {
         let qualified = false;
         if (role === 'ministers') {
-            if ((p?.[CONSTRUCTION] ?? 0) + (p?.[RESEARCH] ?? 0) >= schedulerData.minHours) qualified = true;
-            if (day === 4 && (p?.[SOLDIER_TRAINING] ?? 0) >= schedulerData.minHours) qualified = true;
+            if ((p?.[CONSTRUCTION] ?? 0) + (p?.[RESEARCH] ?? 0) >= schedulerData.minDays) qualified = true;
+            if (day === 4 && (p?.[SOLDIER_TRAINING] ?? 0) >= schedulerData.minDays) qualified = true;
         } else {
-            if ((p?.[SOLDIER_TRAINING] ?? 0) >= schedulerData.minHours) qualified = true;
+            if ((p?.[SOLDIER_TRAINING] ?? 0) >= schedulerData.minDays) qualified = true;
         }
         return qualified;
     });
@@ -2346,12 +2497,42 @@ function openMessagesModal(day, role) {
 }
 
 /**
- * Copies the provided encoded text to clipboard.
- * @param {string} encodedText - Base64 encoded text
+ * Copies text to the clipboard using the async Clipboard API when available,
+ * falling back to the legacy execCommand textarea method otherwise.
+ * @param {string} text - The text to copy to the clipboard.
  */
-function copyToClipboard(encodedText) {
-    const text = encodedText;
-    navigator.clipboard.writeText(text).catch(e => alert('Copy failed: ' + e.message));
+function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(function() {
+            copyTextViaExecCommand(text);
+        });
+        return;
+    }
+    copyTextViaExecCommand(text);
+}
+
+/**
+ * Copies text via a temporary textarea and document.execCommand('copy').
+ * Fallback for environments where the async Clipboard API is unavailable.
+ * @param {string} text - The text to copy to the clipboard.
+ */
+function copyTextViaExecCommand(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.opacity = '0';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+        const copied = document.execCommand('copy');
+        if (!copied) {
+            alert('Copy failed: the browser did not allow copying.');
+        }
+    } catch (error) {
+        alert('Copy failed: ' + error.message);
+    }
+    document.body.removeChild(textArea);
 }
 
 /**
@@ -2387,15 +2568,15 @@ function updateAssignmentSlots() {
     if (role === 'ministers') {
         // Any minister slot requires minister qualification OR it's Day 4 overflow (which counts as advisor)
         // BUT strict qualification: 
-        if ((playerObj[CONSTRUCTION] + playerObj[RESEARCH]) >= schedulerData.minHours) qualified = true;
+        if ((playerObj[CONSTRUCTION] + playerObj[RESEARCH]) >= schedulerData.minDays) qualified = true;
         // Exception: Day 4 Minister slot can be used by Advisor qualified players as overflow
-        if (day === 4 && playerObj[SOLDIER_TRAINING] >= schedulerData.minHours) qualified = true; 
+        if (day === 4 && playerObj[SOLDIER_TRAINING] >= schedulerData.minDays) qualified = true; 
     } else {
-        if (playerObj[SOLDIER_TRAINING] >= schedulerData.minHours) qualified = true;
+        if (playerObj[SOLDIER_TRAINING] >= schedulerData.minDays) qualified = true;
     }
     
     if (!qualified) {
-        container.innerHTML = '<div class="alert alert-warning">Player does not meet minimum hours for this role/day configuration.</div>';
+        container.innerHTML = '<div class="alert alert-warning">Player does not meet minimum speedup days for this role/day configuration.</div>';
         return;
     }
 
@@ -2488,7 +2669,9 @@ function performAssignment(day, role, start, end) {
         alliance: alliance,
         player: player,
         speedups: speedupsDisplay,
-        truegold: playerObj[TRUEGOLD_PIECES]
+        truegold: playerObj[TRUEGOLD_PIECES],
+        temperedTrueGold: playerObj[TEMPERED_TRUEGOLD] || 0,
+        trueGoldDust: playerObj[TRUEGOLD_DUST] || 0
     };
     schedulerData.assignments[day][role].push(newAssignment);
     
@@ -2572,10 +2755,10 @@ function populateSlotAssignPlayerList() {
     const qualifiedPlayers = schedulerData.processedPlayers.filter(p => {
         let qualified = false;
         if (role === 'ministers') {
-            if ((p?.[CONSTRUCTION] ?? 0) + (p?.[RESEARCH] ?? 0) >= schedulerData.minHours) qualified = true;
-            if (day === 4 && (p?.[SOLDIER_TRAINING] ?? 0) >= schedulerData.minHours) qualified = true;
+            if ((p?.[CONSTRUCTION] ?? 0) + (p?.[RESEARCH] ?? 0) >= schedulerData.minDays) qualified = true;
+            if (day === 4 && (p?.[SOLDIER_TRAINING] ?? 0) >= schedulerData.minDays) qualified = true;
         } else {
-            if ((p?.[SOLDIER_TRAINING] ?? 0) >= schedulerData.minHours) qualified = true;
+            if ((p?.[SOLDIER_TRAINING] ?? 0) >= schedulerData.minDays) qualified = true;
         }
         if (!qualified) return false;
         
@@ -2668,7 +2851,9 @@ function performSlotAssign(alliance, player) {
         alliance: alliance,
         player: player,
         speedups: speedupsDisplay,
-        truegold: playerObj[TRUEGOLD_PIECES]
+        truegold: playerObj[TRUEGOLD_PIECES],
+        temperedTrueGold: playerObj[TEMPERED_TRUEGOLD] || 0,
+        trueGoldDust: playerObj[TRUEGOLD_DUST] || 0
     };
     schedulerData.assignments[day][role].push(newAssignment);
     
@@ -2763,16 +2948,18 @@ function removeAssignment(day, role, start, alliance, player) {
                     research: Math.round(p[RESEARCH])
                 },
                 truegold: Math.round(p[TRUEGOLD_PIECES]),
+                temperedTrueGold: Math.round(p[TEMPERED_TRUEGOLD]) || 0,
+                trueGoldDust: Math.round(p[TRUEGOLD_DUST]) || 0,
                 timeSlots: p.availableTimeRanges.map(r => `${r.start}-${r.end}`).join(', ') || 'No available ranges'
             };
             // Add to all waiting lists for which the player qualifies
-            if (p[CONSTRUCTION] >= schedulerData.minHours) {
+            if (p[CONSTRUCTION] >= schedulerData.minDays) {
                 schedulerData.waitingLists[schedulerData.constructionKingDay].push({ ...waitingPlayer });
             }
-            if (p[RESEARCH] >= schedulerData.minHours) {
+            if (p[RESEARCH] >= schedulerData.minDays) {
                 schedulerData.waitingLists[schedulerData.researchKingDay].push({ ...waitingPlayer });
             }
-            if (p[SOLDIER_TRAINING] >= schedulerData.minHours) {
+            if (p[SOLDIER_TRAINING] >= schedulerData.minDays) {
                 schedulerData.waitingLists[4].push({ ...waitingPlayer });
             }
             // Always add to spillover day waiting list

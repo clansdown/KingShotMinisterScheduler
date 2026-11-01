@@ -8,6 +8,8 @@
  * @property {number} construction - Base construction speedups (converted to number).
  * @property {number} research - Base research speedups (converted to number).
  * @property {number} truegoldPieces - Number of TrueGold pieces (converted to number).
+ * @property {number} temperedTrueGold - Number of Tempered TrueGold items (converted to number, default 0).
+ * @property {number} trueGoldDust - Number of TrueGold Dust items (converted to number, default 0).
  * @property {string} timeSlotStartUtc - Overall start time in HH:MM.
  * @property {string} timeSlotEndUtc - Overall end time in HH:MM.
  * @property {string} [allTimes] - Available time ranges string.
@@ -29,6 +31,8 @@ const SOLDIER_TRAINING = 'soldier training';
 const CONSTRUCTION = 'construction';
 const RESEARCH = 'research';
 const TRUEGOLD_PIECES = 'truegold pieces';
+const TEMPERED_TRUEGOLD = 'tempered truegold';
+const TRUEGOLD_DUST = 'truegold dust';
 const TIME_SLOT_START_UTC = 'time slot start utc';
 const TIME_SLOT_END_UTC = 'time slot end utc';
 const ALL_TIMES = 'all times';
@@ -409,7 +413,7 @@ function parseCsvToObjects(csvText) {
         });
 
         // Convert numeric fields and validate
-        const numericFields = [GENERAL_SPEEDUPS, SOLDIER_TRAINING, CONSTRUCTION, RESEARCH, TRUEGOLD_PIECES];
+        const numericFields = [GENERAL_SPEEDUPS, SOLDIER_TRAINING, CONSTRUCTION, RESEARCH, TRUEGOLD_PIECES, TEMPERED_TRUEGOLD, TRUEGOLD_DUST];
         numericFields.forEach(field => {
             const originalVal = player[field]?.trim() ?? '';
             const lowerVal = originalVal.toLowerCase();

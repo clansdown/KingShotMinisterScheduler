@@ -63,6 +63,12 @@ function exportToHtml() {
         day5Section.remove();
     }
 
+    // Remove Day 4 Chief Minister section if its generation was disabled
+    var day4MinisterSection = clone.querySelector('#day4MinisterSection');
+    if (day4MinisterSection && !schedulerData.generateDay4Ministers) {
+        day4MinisterSection.remove();
+    }
+
     var dayContents = clone.querySelectorAll('.day-content');
     dayContents.forEach(function(el) {
         el.style.display = '';
@@ -280,12 +286,72 @@ function exportToHtml() {
         }
     }
 
+    // Build the day navigation links from the day sections present in the clone
+    var dayLinks = '';
+    [1, 2, 4, 5].forEach(function(dayNum) {
+        if (clone.querySelector('#day' + dayNum + 'Section')) {
+            dayLinks += '    <a class="btn btn-sm btn-outline-primary" href="#day' + dayNum + 'Section">Day ' + dayNum + '</a>\n';
+        }
+    });
+
+    // Build the Alliance filter options from alliances actually present in the export
+    var allianceOptions = '    <option value="All" selected>All</option>\n';
+    var seenAlliances = {};
+    function addExportAlliance(allianceName) {
+        if (!allianceName || seenAlliances[allianceName]) return;
+        seenAlliances[allianceName] = true;
+        var escapedAlliance = String(allianceName).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        allianceOptions += '    <option value="' + escapedAlliance + '">' + escapedAlliance + '</option>\n';
+    }
+    clone.querySelectorAll('table tbody tr td:nth-child(2)').forEach(function(cell) {
+        var match = cell.textContent.trim().match(/^\[([^\]]+)\]/);
+        if (match) addExportAlliance(match[1]);
+    });
+    clone.querySelectorAll('ol[id$="WaitingList"] li').forEach(function(item) {
+        var match = item.textContent.trim().match(/^\[([^\]]+)\]/);
+        if (match) addExportAlliance(match[1]);
+    });
+
+    // Collect full line data per message modal so copy text can be recalculated per alliance
+    var exportMessageData = {};
+    function addExportMessageData(dayNum, role) {
+        var appointments = schedulerData.assignments[dayNum] && schedulerData.assignments[dayNum][role];
+        if (appointments && appointments.length > 0) {
+            var modalId = 'day' + dayNum + (role === 'ministers' ? 'Minister' : 'Advisor') + 'MessagesModal';
+            exportMessageData[modalId] = appointments.map(function(appointment) {
+                return appointment.start + ' [' + appointment.alliance + ']' + appointment.player;
+            });
+        }
+    }
+    addExportMessageData(1, 'ministers');
+    addExportMessageData(1, 'advisors');
+    addExportMessageData(2, 'ministers');
+    addExportMessageData(2, 'advisors');
+    addExportMessageData(4, 'ministers');
+    addExportMessageData(4, 'advisors');
+    addExportMessageData(5, 'ministers');
+    addExportMessageData(5, 'advisors');
+
+    var navHTML = '<nav id="exportHeaderNav" class="sticky-top border-bottom py-2" style="background-color: var(--bs-body-bg); z-index: 3;">\n' +
+        '    <div class="container-fluid d-flex flex-wrap align-items-center gap-2">\n' +
+        '        <strong class="me-1">Jump to:</strong>\n' +
+        dayLinks +
+        '        <span class="ms-auto d-flex align-items-center gap-2">\n' +
+        '            <label class="form-label mb-0" for="exportAllianceFilter">Alliance</label>\n' +
+        '            <select id="exportAllianceFilter" class="form-select form-select-sm" style="width: auto;" onchange="applyAllianceFilter()">\n' +
+        allianceOptions +
+        '            </select>\n' +
+        '        </span>\n' +
+        '    </div>\n' +
+        '</nav>\n';
+
     var inlineStyles = '<style>\n' +
+        'html { scroll-behavior: smooth; }\n' +
         'body { font-family: Arial, sans-serif; margin: 20px; }\n' +
-        '.day-section { margin-bottom: 30px; }\n' +
+        '.day-section { margin-bottom: 30px; scroll-margin-top: 72px; }\n' +
         'thead th {\n' +
         '    position: sticky;\n' +
-        '    top: 0;\n' +
+        '    top: 56px;\n' +
         '    background-color: var(--bs-body-bg);\n' +
         '    z-index: 1;\n' +
         '}\n' +
@@ -293,6 +359,78 @@ function exportToHtml() {
         '</style>\n';
 
     var exportJS = '<script>\n' +
+        'var EXPORT_MESSAGE_DATA = ' + JSON.stringify(exportMessageData).replace(/<\//g, '<\\/') + ';\n' +
+        'function escapeAttr(text) {\n' +
+        '    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");\n' +
+        '}\n' +
+        'function chunkLines(lines) {\n' +
+        '    var blocks = [];\n' +
+        '    var currentBlock = "";\n' +
+        '    var currentBlockLineCount = 0;\n' +
+        '    lines.forEach(function(line) {\n' +
+        '        var lineWithNewline = line + "\\n";\n' +
+        '        var wouldExceedLineLimit = (currentBlockLineCount + 1) > 10;\n' +
+        '        var wouldExceedCharLimit = (currentBlock.length + lineWithNewline.length) > 499;\n' +
+        '        if (currentBlock.length > 0 && (wouldExceedLineLimit || wouldExceedCharLimit)) {\n' +
+        '            blocks.push(currentBlock.trimEnd());\n' +
+        '            currentBlock = lineWithNewline;\n' +
+        '            currentBlockLineCount = 1;\n' +
+        '        } else if (currentBlock.length === 0 && wouldExceedCharLimit) {\n' +
+        '            currentBlock = lineWithNewline;\n' +
+        '            currentBlockLineCount = 1;\n' +
+        '        } else {\n' +
+        '            currentBlock += lineWithNewline;\n' +
+        '            currentBlockLineCount++;\n' +
+        '        }\n' +
+        '    });\n' +
+        '    if (currentBlock.length > 0) blocks.push(currentBlock.trimEnd());\n' +
+        '    return blocks;\n' +
+        '}\n' +
+        'function renderMessageBlocksHTML(lines) {\n' +
+        '    if (lines.length === 0) return "<p>No assignments to display.</p>";\n' +
+        '    var html = "";\n' +
+        '    chunkLines(lines).forEach(function(block) {\n' +
+        '        var escapedText = escapeAttr(block);\n' +
+        '        html += \'<div class="message-block" data-text="\' + escapedText + \'">\';\n' +
+        '        html += \'<div class="border p-3 mb-3"><div class="row"><div class="col"><pre>\' + escapedText + \'</pre></div>\';\n' +
+        '        html += \'<div class="col-auto text-end d-flex align-items-start">\';\n' +
+        '        html += \'<button class="btn btn-sm" onclick="copyExportMessage(this)">📋</button>\';\n' +
+        '        html += \'</div></div></div></div>\';\n' +
+        '    });\n' +
+        '    return html;\n' +
+        '}\n' +
+        'function applyAllianceFilter() {\n' +
+        '    var select = document.getElementById("exportAllianceFilter");\n' +
+        '    if (!select) return;\n' +
+        '    var alliance = select.value;\n' +
+        '    document.querySelectorAll("table tbody tr").forEach(function(tr) {\n' +
+        '        var cells = tr.querySelectorAll("td");\n' +
+        '        if (cells.length < 2) {\n' +
+        '            tr.style.display = alliance === "All" ? "" : "none";\n' +
+        '            return;\n' +
+        '        }\n' +
+        '        var match = cells[1].textContent.trim().match(/^\\[([^\\]]+)\\]/);\n' +
+        '        var rowAlliance = match ? match[1] : "";\n' +
+        '        tr.style.display = (alliance === "All" || rowAlliance === alliance) ? "" : "none";\n' +
+        '    });\n' +
+        '    document.querySelectorAll(\'ol[id$="WaitingList"] li\').forEach(function(item) {\n' +
+        '        var match = item.textContent.trim().match(/^\\[([^\\]]+)\\]/);\n' +
+        '        var itemAlliance = match ? match[1] : "";\n' +
+        '        item.style.display = (alliance === "All" || itemAlliance === alliance) ? "" : "none";\n' +
+        '    });\n' +
+        '    Object.keys(EXPORT_MESSAGE_DATA).forEach(function(modalId) {\n' +
+        '        var modal = document.getElementById(modalId);\n' +
+        '        if (!modal) return;\n' +
+        '        var body = modal.querySelector(".modal-body");\n' +
+        '        if (!body) return;\n' +
+        '        var lines = EXPORT_MESSAGE_DATA[modalId];\n' +
+        '        if (alliance !== "All") {\n' +
+        '            var prefix = "[" + alliance + "]";\n' +
+        '            lines = lines.filter(function(line) { return line.indexOf(prefix) !== -1; });\n' +
+        '        }\n' +
+        '        body.innerHTML = renderMessageBlocksHTML(lines);\n' +
+        '    });\n' +
+        '}\n' +
         'function copyExportMessage(btn) {\n' +
         '    var block = btn.closest(".message-block");\n' +
         '    var text = block.getAttribute("data-text");\n' +
@@ -322,6 +460,7 @@ function exportToHtml() {
         '</head>\n' +
         '<body>\n' +
         '<h1>KingShot Minister Scheduler - Appointments</h1>\n' +
+        navHTML +
         clone.outerHTML +
         exportJS +
         '<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>\n' +
@@ -424,7 +563,7 @@ function generateMinisterHeaders(day) {
             speedupsHeader = 'Construction / Research / Training';
             break;
     }
-    return ['Appointment Time', '[Alliance]Player', speedupsHeader, 'TrueGold'];
+    return ['Appointment Time', '[Alliance]Player', speedupsHeader, 'TrueGold', 'Tempered TrueGold', 'TrueGold Dust'];
 }
 
 /**
@@ -454,6 +593,9 @@ function extractAllWorksheets() {
     var worksheets = [];
 
     tables.forEach(function(table) {
+        if (table.id === 'day4MinisterTable' && !schedulerData.generateDay4Ministers) {
+            return;
+        }
         var data = extractTableWorksheet(table.id, table.day, table.type);
 
         if (data && data.rows.length > 0) {
@@ -525,7 +667,7 @@ function extractWaitingListWorksheet(listId, day) {
     var list = document.getElementById(listId);
     if (!list) return null;
 
-    var headers = ['[Alliance]Player', 'Training Speedups', 'Construction', 'Research', 'TrueGold', 'Time Slots'];
+    var headers = ['[Alliance]Player', 'Training Speedups', 'Construction', 'Tempered TrueGold', 'Research', 'TrueGold Dust', 'TrueGold', 'Time Slots'];
     var worksheetName = 'Day ' + day + ' Waiting List';
     var rows = [];
 
@@ -536,14 +678,18 @@ function extractWaitingListWorksheet(listId, day) {
         var alliancePlayer = parts[0] || '';
 
         var speedupsPart = parts[1] || '';
-        var training = speedupsPart.match(/T:(\d+)/);
-        var construction = speedupsPart.match(/C:(\d+)/);
-        var research = speedupsPart.match(/R:(\d+)/);
-        var truegold = speedupsPart.match(/TG:(\d+)/);
+        var training = speedupsPart.match(/(?:^|\s)T:(\d+)/);
+        var construction = speedupsPart.match(/(?:^|\s)C:(\d+)/);
+        var tempered = speedupsPart.match(/(?:^|\s)TT:(\d+)/);
+        var research = speedupsPart.match(/(?:^|\s)R:(\d+)/);
+        var dust = speedupsPart.match(/(?:^|\s)TD:(\d+)/);
+        var truegold = speedupsPart.match(/(?:^|\s)TG:(\d+)/);
 
         training = training ? training[1] : '0';
         construction = construction ? construction[1] : '0';
+        tempered = tempered ? tempered[1] : '0';
         research = research ? research[1] : '0';
+        dust = dust ? dust[1] : '0';
         truegold = truegold ? truegold[1] : '0';
 
         var timeSlots = '';
@@ -551,7 +697,7 @@ function extractWaitingListWorksheet(listId, day) {
             timeSlots = parts[2].replace('Time Slots: ', '').trim();
         }
 
-        rows.push([alliancePlayer, training, construction, research, truegold, timeSlots]);
+        rows.push([alliancePlayer, training, construction, tempered, research, dust, truegold, timeSlots]);
     });
 
     return { name: worksheetName, headers: headers, rows: rows };

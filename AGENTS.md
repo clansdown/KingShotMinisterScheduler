@@ -25,7 +25,8 @@ Follow these rules for consistency. The codebase uses vanilla JavaScript (ES5+) 
 - Avoid new files unless absolutely required.
 
 ### Imports and Dependencies
-- No ES6 imports (vanilla JS). Load scripts in order: `storage.js`, `parse.js`, `calculator.js`.
+- No ES6 imports (vanilla JS). Load scripts in order: `storage.js`, `utils.js`, `parse.js`, `calculator.js`, `export.js`.
+- Script tags in `index.html` carry cache-busting version query strings (e.g., `calculator.js?v=2`). Whenever code in a loaded script file changes, bump that file's `?v=` value (e.g. `v=2` → `v=3`) so browsers fetch the updated file instead of a stale cached copy.
 - If adding libs (e.g., PapaParse for CSV), use `<script src="...">` in HTML after Bootstrap.
 - For styling, include Bootstrap via CDN links in `<head>` (CSS) and before `</body>` (JS).
 - Check for existing usage before adding: e.g., search codebase for similar libs.
